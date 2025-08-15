@@ -22,6 +22,7 @@ from datetime import datetime
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import silhouette_score
+from sklearn.model_selection import train_test_split
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.drawing.image import Image as XLImage
