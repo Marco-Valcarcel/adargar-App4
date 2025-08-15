@@ -1783,8 +1783,6 @@ with tab14:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-V
-
 with tab16:
     st.subheader("📌 Estrategias Sugeridas por Clúster")
     st.caption(f"Estrategias basadas en la distribución actual de clientes en **{region}**")
