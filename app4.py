@@ -711,13 +711,13 @@ def plot_scatter_rfm(df, eje_x, eje_y, titulo="RFM Scatter"):
         eje_y (str): Nombre de la columna para el eje Y.
         titulo (str): Título del gráfico.
     """
-    # Definimos el diccionario de colores para los clústeres
+    # 🎨 Diccionario de colores y estrategias para 5 clústeres
     colores_k5 = {
-        0: 'green',
-        1: 'blue',
-        2: 'red',
-        3: 'purple',
-        4: 'orange'
+        "Diamante": "#00FFFF",
+        "Oro": "#FFD700",
+        "Plata": "#C0C0C0",
+        "Cobre": "#B87333",
+        "Bronce": "#CD7F32"
     }
 
     # Usamos plotly.express para crear el gráfico de dispersión de manera sencilla.
