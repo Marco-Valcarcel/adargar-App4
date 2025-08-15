@@ -1074,8 +1074,8 @@ with tab7:
     st.info(estrategias.get(segmento_seleccionado, "Estrategia no definida para este segmento."))
 
 # 🛠️ Recalcular df_tac y df_moq después de entrenar el modelo
-df_tac = rfm[rfm["Región"] == "Tacna"].copy()
-df_moq = rfm[rfm["Región"] == "Moquegua"].copy()
+df_tac = rfm[rfm["Region"] == "Tacna"].copy()
+df_moq = rfm[rfm["Region"] == "Moquegua"].copy()
 
 # Función para interpretar las predicciones, asumiendo que existe
 # Es recomendable definir esta función en otro bloque de código.
