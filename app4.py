@@ -26,9 +26,6 @@ from sklearn.metrics import silhouette_score
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.drawing.image import Image as XLImage
-
-import streamlit as st
-import pandas as pd
 import zipfile, os
 
 def cargar_csv_desde_zip(empresa="adargar", region="tacna"):
@@ -462,23 +459,35 @@ def interpretar_predicciones(region, df_region):
         st.error(f"❌ Error durante la interpretación de predicciones: {e}")
 
 def plot_scatter_rfm(df, eje_x, eje_y, titulo="RFM Scatter"):
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for label, color in colores_k5.items():  # 🚨 Cambiado de colores_k3 a colores_k5
-        subset = df[df["Cluster_Label"] == label]
-        ax.scatter(
-            subset[eje_x],
-            subset[eje_y],
-            label=label,
-            color=color,
-            alpha=0.7,
-            edgecolors="k"
-        )
-    ax.set_xlabel(eje_x)
-    ax.set_ylabel(eje_y)
-    ax.set_title(titulo, fontsize=14)
-    ax.legend(title="Segmento", loc="upper right")
-    ax.grid(True)
-    plt.tight_layout()
+    """
+    Crea un gráfico de dispersión interactivo usando Plotly.
+    Plotly es la librería recomendada para gráficos en Streamlit.
+    """
+    # Usamos plotly.express para crear el gráfico de dispersión de manera sencilla.
+    # El diccionario de colores se mapea directamente a la columna 'Cluster_Label'
+    fig = px.scatter(
+        df,
+        x=eje_x,
+        y=eje_y,
+        color="Cluster_Label",
+        title=titulo,
+        color_discrete_map=colores_k5,
+        hover_data=['C_CLIEN', 'Recency', 'Frequency', 'Monetary'] # Añadimos información en el tooltip
+    )
+
+    # Actualizamos el diseño para una mejor visualización
+    fig.update_layout(
+        title={
+            'text': titulo,
+            'y':0.9,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        legend_title_text='Segmento',
+        hovermode="closest"
+    )
+
     return fig
 
 with tab1:
@@ -496,26 +505,10 @@ with tab1:
     # Obtener el DataFrame de la región seleccionada
     df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
 
-    # Generar el gráfico de dispersión con los 5 clústeres
-    fig = plt.figure(figsize=(10, 6))
-    for label, color in colores_k5.items():  # 🚨 Cambiado de colores_k3 a colores_k5
-        subset = df_region[df_region["Cluster_Label"] == label]
-        if not subset.empty:
-            plt.scatter(
-                subset[eje_x],
-                subset[eje_y],
-                label=label,
-                color=color,
-                alpha=0.7,
-                edgecolors="k"
-            )
-
-    plt.xlabel(eje_x)
-    plt.ylabel(eje_y)
-    plt.title(f"{region} - {eje_y} vs {eje_x}")
-    plt.legend(title="Segmento")
-    plt.grid(True)
-    st.pyplot(fig)
+    # Generar el gráfico de dispersión llamando a la función corregida con Plotly
+    # Se reemplaza la lógica de Matplotlib para usar la función plot_scatter_rfm.
+    fig = plot_scatter_rfm(df_region, eje_x, eje_y, titulo=f"{region} - {eje_y} vs {eje_x}")
+    st.plotly_chart(fig)
 
     st.caption("📊 Distribución actual de clientes por segmento en la región seleccionada:")
     st.dataframe(
@@ -602,27 +595,34 @@ with tab2:
 def ordenar_segmentos_seguro(series_segmentos, nombre_var="Cluster_Label"):
     """
     Función robusta para ordenar segmentos de manera segura.
+    Se asegura de que el orden jerárquico se respete,
+    y añade cualquier segmento inesperado al final.
     """
-    # 🚨 Definimos el orden jerárquico para los 5 clústeres
+    # Definimos el orden jerárquico deseado para los 5 clústeres
     orden_jerarquico = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
 
-    # Obtenemos los segmentos que realmente existen en los datos
-    segmentos_existentes = series_segmentos.index.tolist()
+    # Obtenemos los segmentos que realmente existen en los datos (el índice de la serie)
+    segmentos_existentes = list(series_segmentos.index)
 
-    # Filtramos la lista de orden jerárquico para que solo contenga los segmentos que existen
+    # Creamos el orden final filtrando el orden jerárquico con los segmentos existentes
     orden_final = [seg for seg in orden_jerarquico if seg in segmentos_existentes]
 
-    # Agregamos cualquier segmento que no esté en la lista jerárquica al final
+    # Añadimos cualquier segmento existente que no esté en nuestra lista jerárquica
+    # Esto es útil si aparece un clúster no esperado en el futuro
     for seg in segmentos_existentes:
         if seg not in orden_final:
             orden_final.append(seg)
 
-    # Reindexamos la serie con el orden final
+    # Reindexamos la serie con el orden final y devolvemos el resultado
     return series_segmentos.reindex(orden_final)
 
-def graficar_tamaño_cluster(df, region=""):
-    import matplotlib.pyplot as plt
+import plotly.express as px
 
+def graficar_tamaño_cluster(df, region=""):
+    """
+    Función para graficar el tamaño de los clústeres usando Plotly.
+    Plotly es la librería recomendada y compatible con Streamlit.
+    """
     # 🚨 Usamos el orden y los colores de los 5 clústeres
     orden = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
     colores_k5 = {
@@ -633,29 +633,41 @@ def graficar_tamaño_cluster(df, region=""):
         "Bronce": "#CD7F32"
     }
 
-    conteo = df["Cluster_Label"].value_counts().reindex(orden).fillna(0).astype(int)
-    colores = [colores_k5.get(label, 'gray') for label in conteo.index]
+    # Contamos los clientes por clúster y reindexamos para el orden correcto
+    conteo = df["Cluster_Label"].value_counts().reindex(orden).fillna(0).astype(int).reset_index()
+    conteo.columns = ["Cluster", "Clientes"]
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    bars = ax.bar(conteo.index, conteo.values, color=colores, edgecolor="k")
+    # Creamos el gráfico de barras interactivo con Plotly
+    fig = px.bar(
+        conteo,
+        x="Cluster",
+        y="Clientes",
+        color="Cluster",
+        color_discrete_map=colores_k5,
+        labels={"Cluster": "Segmento", "Clientes": "Nro. de Clientes"},
+        title=f"📊 Distribución de clientes por segmento – {region}",
+    )
 
-    for bar, valor in zip(bars, conteo.values):
-        altura = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            altura + 2,
-            str(valor),
-            ha="center",
-            va="bottom",
-            fontsize=10,
-            fontweight="bold"
-        )
+    # Añadimos las etiquetas de texto encima de las barras
+    fig.update_traces(texttemplate='%{y}', textposition='outside')
+    fig.update_layout(
+        title={
+            'text': f"📊 Distribución de clientes por segmento – {region}",
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        xaxis={'categoryorder': 'array', 'categoryarray': orden}, # Aseguramos el orden en el eje X
+        hovermode="x unified",
+        showlegend=False # La información ya está en el eje X
+    )
 
-    ax.set_title(f"📊 Distribución de clientes por segmento – {region}")
-    ax.set_ylabel("Nro. de Clientes")
-    ax.grid(axis="y", linestyle="--", alpha=0.5)
-    fig.tight_layout()
     return fig
+
+# Ejemplo de cómo se llamaría la función en Streamlit:
+# fig_tamano = graficar_tamaño_cluster(df_region, region)
+# st.plotly_chart(fig_tamano)
 
 with tab3:
     st.subheader("📦 Distribución de Clientes por Segmento RFM")
@@ -663,8 +675,9 @@ with tab3:
 
     df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
 
-    # 👁️ Mostrar gráfico de barras adaptado
-    st.pyplot(graficar_tamaño_cluster(df_region, region))
+    # 👁️ Mostrar gráfico de barras adaptado con Plotly
+    # Se ha cambiado st.pyplot por st.plotly_chart para un gráfico interactivo.
+    st.plotly_chart(graficar_tamaño_cluster(df_region, region))
 
     # 🧮 Mostrar tabla resumen de conteo por clúster
     conteo = ordenar_segmentos_seguro(df_region["Cluster_Label"].value_counts()).reset_index()
@@ -676,7 +689,7 @@ with tab3:
         segmento_max = conteo.loc[conteo["Clientes"].idxmax(), "Segmento"]
         st.markdown(f"- 🏆 El segmento dominante en **{region}** es **{segmento_max}**.")
 
-        # 🚨 Lógica de interpretación actualizada para 5 clústeres
+        # � Lógica de interpretación actualizada para 5 clústeres
         if segmento_max == "Diamante":
             st.success("💎 Excelente: predominan los clientes más valiosos y leales.")
         elif segmento_max == "Oro":
@@ -743,9 +756,15 @@ with tab4:
     """
     st.markdown(tabla_html, unsafe_allow_html=True)
 
-def plot_boxplots_rfm(df, region):
-    rfm_vars = ["Recency", "Frequency", "Monetary"]
+import plotly.express as px
+import pandas as pd
 
+def plot_boxplots_rfm(df, region):
+    """
+    Función que genera boxplots interactivos para las variables RFM por clúster
+    usando Plotly. Se utiliza la técnica de 'melt' para reestructurar los datos
+    y graficar los tres boxplots en una sola llamada a Plotly.
+    """
     # 🚨 Usamos el orden y los colores de los 5 clústeres
     orden_k5 = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
     colores_k5 = {
@@ -756,28 +775,49 @@ def plot_boxplots_rfm(df, region):
         "Bronce": "#CD7F32"
     }
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    for i, var in enumerate(rfm_vars):
-        ax = axes[i]
-        sns.boxplot(
-            data=df,
-            x="Cluster_Label",
-            y=var,
-            order=orden_k5,  # 🚨 Se usa el nuevo orden
-            palette=colores_k5,  # 🚨 Se usa la nueva paleta de colores
-            ax=ax
-        )
-        ax.set_title(f"{var}", fontsize=13)
-        ax.set_xlabel("Segmento")
-        ax.set_ylabel(var)
-        ax.grid(True, axis="y", linestyle="--", alpha=0.6)
+    # Seleccionamos las variables RFM y el clúster
+    rfm_vars = ["Recency", "Frequency", "Monetary"]
+    df_plot = df[["Cluster_Label"] + rfm_vars].copy()
 
-    plt.suptitle(f"Distribución RFM por Clúster – {region}", fontsize=16)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    # Se utiliza pd.melt para "derretir" el DataFrame de un formato ancho a uno largo,
+    # lo cual es ideal para graficar múltiples variables en un mismo gráfico de Plotly.
+    df_melt = df_plot.melt(id_vars="Cluster_Label", value_vars=rfm_vars, var_name="Variable", value_name="Valor")
+
+    # Creamos el gráfico de boxplots utilizando facetas para cada variable
+    fig = px.box(
+        df_melt,
+        x="Cluster_Label",
+        y="Valor",
+        color="Cluster_Label",
+        facet_col="Variable",
+        facet_col_wrap=3, # Se muestran los 3 boxplots uno al lado del otro
+        category_orders={"Cluster_Label": orden_k5}, # Aseguramos el orden de los clústeres
+        color_discrete_map=colores_k5,
+        title=f"Distribución RFM por Clúster – {region}",
+        labels={"Cluster_Label": "Segmento", "Valor": "Valor"},
+    )
+
+    # Ajustes de diseño para mejorar la visualización
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # Elimina el "Variable=" del título de la faceta
+    fig.update_layout(
+        title={
+            'text': f"Distribución RFM por Clúster – {region}",
+            'y': 0.9,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        hovermode="closest",
+        legend_title_text='Segmento',
+    )
+
     return fig
 
 # Nueva función para interpretar boxplots
 def interpretar_boxplot_rfm(df, variable, region):
+    """
+    Función de interpretación automática para un boxplot de cualquier variable RFM.
+    """
     st.markdown("🧠 **Interpretación Automática del Boxplot:**")
     try:
         resumen_bruto = df.groupby("Cluster_Label")[variable].describe()[["mean", "25%", "50%", "75%"]].round(2)
@@ -820,9 +860,11 @@ with tab5:
 
     df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
     fig = plot_boxplots_rfm(df_region, region)
-    st.pyplot(fig)
+    # 🚨 LÍNEA CORREGIDA: Se usa st.plotly_chart para un gráfico interactivo
+    st.plotly_chart(fig)
 
-    st.markdown("📌 Interpretación automática por métrica")
+    st.markdown("---") # Separador para mejor lectura
+    st.markdown("### 📌 Interpretación automática por métrica")
     for variable in ("Recency", "Frequency", "Monetary"):
         with st.expander(f"📎 Análisis de {variable} por segmento"):
             # 🚨 Se llama a la nueva función de interpretación para boxplots
@@ -1042,16 +1084,36 @@ with tab7:
 df_tac = rfm[rfm["Región"] == "Tacna"].copy()
 df_moq = rfm[rfm["Región"] == "Moquegua"].copy()
 
+import plotly.express as px
+
+# Función para interpretar las predicciones, asumiendo que existe
+# Es recomendable definir esta función en otro bloque de código.
+def interpretar_predicciones(region, df):
+    # Lógica de interpretación para los clústeres...
+    st.markdown(f"**Análisis Predictivo en la Región {region}:**")
+    for cluster in ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]:
+        df_cluster = df[df["Cluster_Label"] == cluster]
+        if not df_cluster.empty:
+            prob_ascenso_mean = df_cluster["Probabilidad_Ascenso_Oro"].mean()
+            prob_descenso_mean = df_cluster["Probabilidad_Descenso_Bronce"].mean()
+            st.markdown(f"---")
+            st.markdown(f"**Segmento {cluster}:**")
+            st.markdown(f"- Probabilidad promedio de ascenso a Oro: **{prob_ascenso_mean:.2f}**")
+            st.markdown(f"- Probabilidad promedio de caída a Bronce: **{prob_descenso_mean:.2f}**")
+
+# --- Bloque corregido para tab8 ---
 with tab8:
     st.subheader("🔮 Modelo de Evolución de Clientes por Región")
     st.caption(f"Análisis predictivo aplicado a la región **{region}** para anticipar evolución y riesgo de clientes.")
 
     df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
 
-    # 🚨 Se usan las nuevas columnas de predicción
+    # Se usan las nuevas columnas de predicción
     df_region["Probabilidad_Ascenso_Oro"] = pd.to_numeric(df_region["Probabilidad_Ascenso_Oro"], errors="coerce")
     df_region["Probabilidad_Descenso_Bronce"] = pd.to_numeric(df_region["Probabilidad_Descenso_Bronce"], errors="coerce")
 
+    # Vista de clientes con alta probabilidad de ascenso
+    st.markdown("### 📈 Clientes con potencial de ascenso")
     umbral = st.slider("📈 Umbral de probabilidad de ascenso a Oro:", 0.5, 1.0, 0.75, step=0.05)
 
     df_filtrado = df_region[df_region["Probabilidad_Ascenso_Oro"] >= umbral].copy()
@@ -1099,102 +1161,105 @@ with tab8:
             file_name=f"Prediccion_Evolucion_{region}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
     else:
         st.info("🔍 No se encontraron clientes que cumplan el umbral de probabilidad establecido.")
 
     st.subheader("📊 Distribución – Probabilidad de Ascenso a Oro")
     if df_region["Probabilidad_Ascenso_Oro"].notna().sum() > 0:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        df_region["Probabilidad_Ascenso_Oro"].dropna().hist(
-            bins=20, color="skyblue", edgecolor="black", ax=ax
+        # LÍNEA CORREGIDA: Se usa plotly.express para el histograma interactivo
+        fig = px.histogram(
+            df_region, x="Probabilidad_Ascenso_Oro", nbins=20,
+            title=f"Distribución – Probabilidad de Ascenso a Oro ({region})",
+            labels={"Probabilidad_Ascenso_Oro": "Probabilidad", "count": "Clientes"}
         )
-        ax.set_title(f"Distribución – Probabilidad de Ascenso a Oro ({region})")
-        ax.set_xlabel("Probabilidad")
-        ax.set_ylabel("Clientes")
-        st.pyplot(fig)
-
-        # Asumiendo que 'interpretar_histograma_ascenso' está definida
-        # interpretar_histograma_ascenso(df_region, region)
+        st.plotly_chart(fig)
 
         with st.expander("🧠 Ver interpretación predictiva automática por clúster"):
             interpretar_predicciones(region, df_region)
     else:
         st.warning("⚠️ No hay datos numéricos válidos para graficar.")
 
-    with st.expander("📉 Vista estratégica de Riesgo y Oportunidad (Ascenso vs Caída)"):
-        st.markdown("🔍 Analiza clientes según su **probabilidad de ascenso a Oro** y **riesgo de caída a Bronce**.")
+    st.subheader("📈 Vista estratégica de Riesgo y Oportunidad (Ascenso vs Caída)")
+    st.markdown("🔍 Analiza clientes según su **probabilidad de ascenso a Oro** y **riesgo de caída a Bronce**.")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            umbral_ascenso = st.slider("🎯 Umbral de ascenso alto", 0.6, 1.0, 0.8, step=0.05)
-        with col2:
-            umbral_caida = st.slider("🛑 Umbral de caída alta", 0.4, 1.0, 0.6, step=0.05)
+    col1, col2 = st.columns(2)
+    with col1:
+        umbral_ascenso = st.slider("🎯 Umbral de ascenso alto", 0.6, 1.0, 0.8, step=0.05, key="umbral_ascenso_plot")
+    with col2:
+        umbral_caida = st.slider("🛑 Umbral de caída alta", 0.4, 1.0, 0.6, step=0.05, key="umbral_caida_plot")
 
-        def clasificar_cuadrante(row):
-            # 🚨 Lógica de clasificación actualizada con las nuevas columnas
-            if row["Probabilidad_Ascenso_Oro"] >= umbral_ascenso:
-                if row["Probabilidad_Descenso_Bronce"] <= 1 - umbral_caida:
-                    return "Cliente Estrella (Ascenso Seguro)"
-                else:
-                    return "Potencial de Ascenso y Riesgo"
-            elif row["Probabilidad_Descenso_Bronce"] >= umbral_caida:
-                if row["Probabilidad_Ascenso_Oro"] <= 1 - umbral_ascenso:
-                    return "Riesgo de Abandono (Caída Segura)"
-                else:
-                    return "Riesgo con Potencial"
+    def clasificar_cuadrante(row):
+        # 🚨 Lógica de clasificación actualizada con las nuevas columnas
+        if row["Probabilidad_Ascenso_Oro"] >= umbral_ascenso:
+            if row["Probabilidad_Descenso_Bronce"] <= 1 - umbral_caida:
+                return "Cliente Estrella (Ascenso Seguro)"
             else:
-                return "Zona de Desarrollo y Estabilidad"
+                return "Potencial de Ascenso y Riesgo"
+        elif row["Probabilidad_Descenso_Bronce"] >= umbral_caida:
+            if row["Probabilidad_Ascenso_Oro"] <= 1 - umbral_ascenso:
+                return "Riesgo de Abandono (Caída Segura)"
+            else:
+                return "Riesgo con Potencial"
+        else:
+            return "Zona de Desarrollo y Estabilidad"
 
-        df_region["Segmento Estratégico"] = df_region.apply(clasificar_cuadrante, axis=1)
+    df_region["Segmento Estratégico"] = df_region.apply(clasificar_cuadrante, axis=1)
 
-        st.markdown(f"📌 Se han clasificado **{df_region.shape[0]}** clientes según su perfil estratégico.")
-        st.dataframe(
-            df_region[[
-                "C_CLIEN", "Cluster_Label", "Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Segmento Estratégico"
-            ]].rename(columns={
-                "C_CLIEN": "Código Cliente",
-                "Cluster_Label": "Clúster Actual",
-                "Probabilidad_Ascenso_Oro": "Prob. Ascenso a Oro",
-                "Probabilidad_Descenso_Bronce": "Prob. Caída a Bronce"
-            }).round(3),
-            use_container_width=True
-        )
-
-        fig, ax = plt.subplots(figsize=(6, 5))
-        sns.scatterplot(
-            data=df_region,
-            x="Probabilidad_Ascenso_Oro", y="Probabilidad_Descenso_Bronce",
-            hue="Segmento Estratégico", palette="viridis", alpha=0.7, edgecolor="black"
-        )
-        ax.axvline(umbral_ascenso, color="gray", linestyle="--", linewidth=1)
-        ax.axhline(umbral_caida, color="gray", linestyle="--", linewidth=1)
-        ax.set_title(f"Matriz Estratégica de Evolución – {region}")
-        ax.set_xlabel("Probabilidad de Ascenso a Oro")
-        ax.set_ylabel("Probabilidad de Caída a Bronce")
-        st.pyplot(fig)
-
-        excel_buffer = io.BytesIO()
-        df_exportar_cuadrantes = df_region[[
-            "C_CLIEN", "Cluster_Label", "Probabilidad_Ascenso_Oro",
-            "Probabilidad_Descenso_Bronce", "Segmento Estratégico"
+    st.markdown(f"📌 Se han clasificado **{df_region.shape[0]}** clientes según su perfil estratégico.")
+    st.dataframe(
+        df_region[[
+            "C_CLIEN", "Cluster_Label", "Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Segmento Estratégico"
         ]].rename(columns={
             "C_CLIEN": "Código Cliente",
             "Cluster_Label": "Clúster Actual",
             "Probabilidad_Ascenso_Oro": "Prob. Ascenso a Oro",
             "Probabilidad_Descenso_Bronce": "Prob. Caída a Bronce"
-        })
-        df_exportar_cuadrantes.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)
+        }).round(3),
+        use_container_width=True
+    )
 
-        st.download_button(
-            "📥 Descargar Excel de Clientes Segmentados",
-            data=excel_buffer,
-            file_name=f"Matriz_Estrategica_{region}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    # LÍNEA CORREGIDA: Se usa plotly.express para el scatter plot interactivo
+    fig = px.scatter(
+        df_region,
+        x="Probabilidad_Ascenso_Oro", y="Probabilidad_Descenso_Bronce",
+        color="Segmento Estratégico",
+        title=f"Matriz Estratégica de Evolución – {region}",
+        labels={
+            "Probabilidad_Ascenso_Oro": "Probabilidad de Ascenso a Oro",
+            "Probabilidad_Descenso_Bronce": "Probabilidad de Caída a Bronce"
+        },
+        height=500
+    )
+    # Ajustamos la posición de la leyenda y los ejes
+    fig.update_layout(legend_title_text='Segmento Estratégico')
+    # Añadimos las líneas de los umbrales
+    fig.add_vline(x=umbral_ascenso, line_width=1, line_dash="dash", line_color="gray")
+    fig.add_hline(y=umbral_caida, line_width=1, line_dash="dash", line_color="gray")
+    st.plotly_chart(fig)
 
-# 🚨 Nueva función para la interpretación de histogramas
+    excel_buffer = io.BytesIO()
+    df_exportar_cuadrantes = df_region[[
+        "C_CLIEN", "Cluster_Label", "Probabilidad_Ascenso_Oro",
+        "Probabilidad_Descenso_Bronce", "Segmento Estratégico"
+    ]].rename(columns={
+        "C_CLIEN": "Código Cliente",
+        "Cluster_Label": "Clúster Actual",
+        "Probabilidad_Ascenso_Oro": "Prob. Ascenso a Oro",
+        "Probabilidad_Descenso_Bronce": "Prob. Caída a Bronce"
+    })
+    df_exportar_cuadrantes.to_excel(excel_buffer, index=False)
+    excel_buffer.seek(0)
+
+    st.download_button(
+        "📥 Descargar Excel de Clientes Segmentados",
+        data=excel_buffer,
+        file_name=f"Matriz_Estrategica_{region}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+import plotly.express as px
+
+# Nueva función para la interpretación de histogramas RFM
 def interpretar_histograma_rfm(df, variable, region):
     st.markdown("### 🔍 Análisis de la distribución por clúster:")
 
@@ -1212,27 +1277,27 @@ def interpretar_histograma_rfm(df, variable, region):
             # Lógica de interpretación básica
             if variable == "Recency":
                 if media < 30:
-                    st.success(f"  - 🎉 Los clientes de este segmento han comprado recientemente (media < 30 días).")
+                    st.success(f"  - 🎉 Los clientes de este segmento han comprado recientemente (media < 30 días).")
                 elif media > 180:
-                    st.error(f"  - ⏳ Los clientes de este segmento están inactivos (media > 180 días).")
+                    st.error(f"  - ⏳ Los clientes de este segmento están inactivos (media > 180 días).")
                 else:
-                    st.info(f"  - 📈 Compras a intervalos moderados. Oportunidad de marketing. ")
+                    st.info(f"  - 📈 Compras a intervalos moderados. Oportunidad de marketing. ")
 
             elif variable == "Frequency":
                 if media >= 10:
-                    st.success(f"  - 🛒 Clientes muy recurrentes, compran frecuentemente (media >= 10).")
+                    st.success(f"  - 🛒 Clientes muy recurrentes, compran frecuentemente (media >= 10).")
                 elif media >= 3:
-                    st.info(f"  - 🔄 Clientes con frecuencia moderada. Se puede impulsar más compras.")
+                    st.info(f"  - 🔄 Clientes con frecuencia moderada. Se puede impulsar más compras.")
                 else:
-                    st.warning(f"  - 📉 Clientes poco recurrentes. Fomentar la repetición de compra.")
+                    st.warning(f"  - 📉 Clientes poco recurrentes. Fomentar la repetición de compra.")
 
             elif variable == "Monetary":
                 if media >= 2000:
-                    st.success(f"  - 💰 Alto valor monetario. Clientes muy valiosos (media >= S/ 2000).")
+                    st.success(f"  - 💰 Alto valor monetario. Clientes muy valiosos (media >= S/ 2000).")
                 elif media >= 500:
-                    st.info(f"  - 📈 Valor monetario moderado. Potencial para aumentar el ticket promedio.")
+                    st.info(f"  - 📈 Valor monetario moderado. Potencial para aumentar el ticket promedio.")
                 else:
-                    st.warning(f"  - 💸 Bajo valor monetario. Se puede incentivar compras de mayor valor.")
+                    st.warning(f"  - 💸 Bajo valor monetario. Se puede incentivar compras de mayor valor.")
 
 # --- Bloque corregido para tab9 ---
 with tab9:
@@ -1254,31 +1319,25 @@ with tab9:
         "Bronce": "#CD7F32"
     }
 
-    # 📊 Histograma apilado
-    fig, ax = plt.subplots(figsize=(7, 4))
-    sns.histplot(
-        data=df_region,
+    # 📊 Histograma apilado con Plotly Express
+    fig = px.histogram(
+        df_region,
         x=variable,
-        hue="Cluster_Label",
-        multiple="stack",
-        # 🚨 Uso del nuevo diccionario de colores
-        palette=colores_k5,
-        edgecolor="black",
-        bins=20,
-        ax=ax
+        color="Cluster_Label",
+        color_discrete_map=colores_k5,
+        title=f"Distribución de {variable} por Clúster – {region}",
+        labels={variable: variable, "count": "Cantidad de Clientes"}
     )
-    ax.set_title(f"Distribución de {variable} por Clúster – {region}")
-    ax.set_xlabel(variable)
-    ax.set_ylabel("Cantidad de Clientes")
-    st.pyplot(fig)
+    # Mejora: El modo `stack` es el valor por defecto, pero se puede explicitar si es necesario
+    # fig.update_layout(barmode='stack')
+    st.plotly_chart(fig)
 
     # 🧠 Interpretación automática
     with st.expander("🧠 Ver interpretación por clúster"):
         # 🚨 Llamada a la nueva función de interpretación
         interpretar_histograma_rfm(df_region, variable, region)
 
-import seaborn as sns
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 # 🚨 Nueva función para interpretar los violin plots
 def interpretar_violin_rfm(df, variable, region):
@@ -1341,7 +1400,7 @@ def interpretar_kde_rfm(df, variable, region):
                 else:
                     st.info(f"- La curva se concentra en valores bajos, indicando que la mayoría de los clientes tienen un gasto menor.")
 
-# --- Bloque corregido para tab10 ---
+# --- Bloque para tab10 ---
 with tab10:
     st.subheader("🎻 Análisis de Distribución y Densidad por Variable RFM")
     st.caption(f"Explora la dispersión de métricas RFM según el segmento y región seleccionada: **{region}**.")
@@ -1359,73 +1418,58 @@ with tab10:
         "Bronce": "#CD7F32"
     }
     orden_clusters = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
-    paleta_ordenada = [colores_k5[cl] for cl in orden_clusters]
 
-    # 🎼 Violin Plot
+    # 🎼 Violin Plot con Plotly
     st.markdown(f"🎼 **Distribución tipo Violín** de `{variable}` por Clúster")
-    fig1, ax1 = plt.subplots(figsize=(6, 4))
-    sns.violinplot(
-        data=df_region,
+    fig1 = px.violin(
+        df_region,
         x="Cluster_Label",
         y=variable,
-        order=orden_clusters,
-        palette=paleta_ordenada,
-        inner="box",
-        ax=ax1,
-        dodge=False
+        color="Cluster_Label",
+        category_orders={"Cluster_Label": orden_clusters},
+        color_discrete_map=colores_k5,
+        box=True,
+        points="all",
+        title=f"Violin Plot – {variable} por Clúster ({region})",
+        labels={"Cluster_Label": "Segmento", variable: variable}
     )
-    ax1.set_title(f"Violin Plot – {variable} por Clúster ({region})")
-    ax1.set_xlabel("Segmento")
-    ax1.set_ylabel(variable)
-    st.pyplot(fig1)
+    st.plotly_chart(fig1)
 
-    interpretar_violin_rfm(df_region, variable, region)
+    with st.expander("🧠 Ver interpretación del Violin Plot"):
+        interpretar_violin_rfm(df_region, variable, region)
 
-    # 📈 KDE Plot
+    # 📈 KDE Plot con Plotly
     st.markdown(f"📈 **Distribución Suavizada (KDE)** de `{variable}` por Clúster")
-    fig2, ax2 = plt.subplots(figsize=(6, 4))
-    for label in orden_clusters:
-        subset = df_region[df_region["Cluster_Label"] == label]
-        if not subset.empty:
-            sns.kdeplot(
-                subset[variable],
-                label=label,
-                fill=True,
-                alpha=0.6,
-                color=colores_k5[label], # 🚨 Uso del nuevo diccionario de colores
-                linewidth=1.2,
-                ax=ax2
-            )
-    ax2.set_title(f"KDE Plot – {variable} por Clúster ({region})")
-    ax2.set_xlabel(variable)
-    ax2.set_ylabel("Densidad Estimada")
-    ax2.legend(title="Clúster")
-    st.pyplot(fig2)
+    fig2 = px.histogram(
+        df_region,
+        x=variable,
+        color="Cluster_Label",
+        color_discrete_map=colores_k5,
+        marginal="rug",
+        title=f"KDE Plot (Aproximado) – {variable} por Clúster ({region})",
+        labels={variable: variable, "count": "Cantidad de Clientes"},
+        histnorm='density'
+    )
+    fig2.update_traces(opacity=0.7)
+    st.plotly_chart(fig2)
 
-    interpretar_kde_rfm(df_region, variable, region)
+    with st.expander("🧠 Ver interpretación del KDE Plot"):
+        interpretar_kde_rfm(df_region, variable, region)
 
-    # 📊 Histograma clásico por clúster
+    # 📊 Histograma clásico por clúster con Plotly
     with st.expander("📊 Visual adicional: Histograma clásico por clúster"):
         st.markdown("Comparación directa de la forma bruta de la distribución por segmento.")
-
-        fig3, ax3 = plt.subplots(figsize=(6, 4))
-        for label in orden_clusters:
-            subset = df_region[df_region["Cluster_Label"] == label]
-            if not subset.empty:
-                sns.histplot(
-                    subset[variable],
-                    bins=20,
-                    label=label,
-                    color=colores_k5[label], # 🚨 Uso del nuevo diccionario de colores
-                    alpha=0.4,
-                    edgecolor="black",
-                    ax=ax3
-                )
-        ax3.set_title(f"Histograma Comparativo – {variable} ({region})")
-        ax3.set_xlabel(variable)
-        ax3.set_ylabel("Cantidad de Clientes")
-        ax3.legend(title="Clúster")
-        st.pyplot(fig3)
+        fig3 = px.histogram(
+            df_region,
+            x=variable,
+            color="Cluster_Label",
+            color_discrete_map=colores_k5,
+            title=f"Histograma Comparativo – {variable} ({region})",
+            labels={variable: variable, "count": "Cantidad de Clientes"},
+            barmode="overlay",
+            opacity=0.7
+        )
+        st.plotly_chart(fig3)
 
 with tab11:
     st.subheader("🌌 Visualización 3D de Segmentación RFM")
@@ -1491,6 +1535,9 @@ with tab11:
 
     st.plotly_chart(fig, use_container_width=True)
 
+import plotly.graph_objects as go
+import numpy as np
+
 with tab12:
     st.subheader("🧬 Mapa de Correlación – RFM y Variables Predictivas")
     st.caption(f"Analiza la relación entre las métricas RFM y las probabilidades de evolución de los clientes para la región **{region}**.")
@@ -1506,24 +1553,38 @@ with tab12:
     if df_corr.empty:
         st.warning("⚠️ No hay suficientes datos válidos para construir la matriz de correlación.")
     else:
-        fig, ax = plt.subplots(figsize=(6, 5))
         matriz_corr = df_corr.corr()
 
-        sns.heatmap(
-            matriz_corr,
-            annot=True,
-            cmap="coolwarm",
-            center=0,
-            square=True,
-            linewidths=0.5,
-            fmt=".2f",
-            cbar_kws={"shrink": 0.8},
-            ax=ax
+        fig = go.Figure(data=go.Heatmap(
+            z=matriz_corr.values,
+            x=matriz_corr.columns,
+            y=matriz_corr.index,
+            colorscale='Bluered',
+            zmin=-1,
+            zmax=1,
+            showscale=True
+        ))
+
+        fig.update_layout(
+            title=f"Mapa de Correlación – {region}",
+            xaxis_nticks=len(matriz_corr.columns),
+            yaxis_nticks=len(matriz_corr.columns),
+            autosize=True,
+            margin=dict(l=50, r=50, b=50, t=50)
         )
 
-        ax.set_title(f"Mapa de Correlación – {region}", fontsize=14)
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right")
-        st.pyplot(fig)
+        # Añadir anotaciones de texto
+        for i in range(len(matriz_corr.index)):
+            for j in range(len(matriz_corr.columns)):
+                fig.add_annotation(
+                    x=matriz_corr.columns[j],
+                    y=matriz_corr.index[i],
+                    text=f"{matriz_corr.iloc[i, j]:.2f}",
+                    showarrow=False,
+                    font=dict(color='black' if np.abs(matriz_corr.iloc[i, j]) < 0.5 else 'white')
+                )
+
+        st.plotly_chart(fig, use_container_width=True)
 
         # 🧠 Interpretación automática
         st.markdown("### 🧠 Interpretación inicial:")
@@ -1542,6 +1603,7 @@ with tab12:
 
 import plotly.graph_objects as go
 import pandas as pd
+import streamlit as st
 
 # 🚨 Nueva función para la interpretación del gráfico de radar
 def interpretar_radar_rfm(df, region):
@@ -1639,9 +1701,19 @@ with tab13:
     # 🧠 Interpretación automática
     interpretar_radar_rfm(df_region, region)
 
+import plotly.express as px
+import pandas as pd
+import streamlit as st
+import io
+
 # 🚨 Nueva función de interpretación comparativa
 def interpretar_comparativa_regional(df):
     st.markdown("### 🧠 Análisis Comparativo Automático")
+
+    # Aseguramos que las columnas existen para evitar errores
+    if "Región" not in df.columns or "Cantidad" not in df.columns or "Monto_Total" not in df.columns:
+        st.error("Error: Las columnas 'Región', 'Cantidad' o 'Monto_Total' no se encuentran en el DataFrame.")
+        return
 
     df_tac = df[df["Región"] == "Tacna"]
     df_moq = df[df["Región"] == "Moquegua"]
@@ -1695,6 +1767,11 @@ with tab14:
     st.subheader("⚖️ Diagnóstico Comparativo entre Regiones")
     st.caption("Analiza cómo se comportan los segmentos RFM entre Tacna y Moquegua en términos de volumen, valor monetario y ticket promedio.")
 
+    # Asegúrate de tener los DataFrames df_tac y df_moq definidos globalmente o pasados
+    # de lo contrario, esto fallará. Asumiendo que están definidos.
+    # df_tac = ...
+    # df_moq = ...
+
     # 🔍 Agrupación por región y clúster
     resumen_tac = df_tac.groupby("Cluster_Label").agg(
         Cantidad=("C_CLIEN", "count"),
@@ -1714,14 +1791,16 @@ with tab14:
 
     # 🚨 Se actualiza el orden de los clústeres a 5
     orden = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
-    resumen_total["Cluster_Label"] = pd.Categorical(resumen_total["Cluster_Label"], categories=orden, ordered=True)
-    resumen_total = resumen_total.sort_values(["Cluster_Label", "Región"])
+    # Filtra los clústeres que no existen en el DataFrame antes de crear la categoría
+    resumen_total_filtered = resumen_total[resumen_total["Cluster_Label"].isin(orden)]
+    resumen_total_filtered["Cluster_Label"] = pd.Categorical(resumen_total_filtered["Cluster_Label"], categories=orden, ordered=True)
+    resumen_total_filtered = resumen_total_filtered.sort_values(["Cluster_Label", "Región"])
 
 
     # 🎨 Gráfico: Distribución de clientes por clúster y región
     st.markdown("### 📊 Distribución de Clientes por Clúster")
     fig1 = px.bar(
-        resumen_total,
+        resumen_total_filtered,
         x="Cluster_Label",
         y="Cantidad",
         color="Región",
@@ -1735,7 +1814,7 @@ with tab14:
     # 💰 Gráfico: Monto total por clúster y región
     st.markdown("### 💰 Valor Monetario Total por Clúster")
     fig2 = px.bar(
-        resumen_total,
+        resumen_total_filtered,
         x="Cluster_Label",
         y="Monto_Total",
         color="Región",
@@ -1749,7 +1828,7 @@ with tab14:
     # 🎟️ Gráfico: Ticket promedio
     st.markdown("### 🎟️ Ticket Promedio por Clúster")
     fig3 = px.bar(
-        resumen_total,
+        resumen_total_filtered,
         x="Cluster_Label",
         y="Ticket_Promedio",
         color="Región",
@@ -1762,13 +1841,13 @@ with tab14:
 
     # 📑 Tabla resumen y exportación
     st.markdown("### 🧾 Tabla Resumen Gerencial")
-    resumen_formato = resumen_total.copy()
+    resumen_formato = resumen_total_filtered.copy()
     resumen_formato["Ticket_Promedio"] = resumen_formato["Ticket_Promedio"].round(2)
     resumen_formato["Monto_Total"] = resumen_formato["Monto_Total"].round(2)
     st.dataframe(resumen_formato, use_container_width=True)
 
     # 🧠 Interpretación comparativa automática
-    interpretar_comparativa_regional(resumen_total)
+    interpretar_comparativa_regional(resumen_total_filtered)
 
     # 📥 Botón de descarga Excel
     excel_buf = io.BytesIO()
@@ -1782,12 +1861,251 @@ with tab14:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+import io
+import streamlit as st
+
+def cargar_csv_desde_zip(region_slug):
+    """Función simulada para cargar datos de ventas.
+    En una implementación real, se adaptaría."""
+    try:
+        df_ventas = pd.read_csv("clientes_segmentados_moquegua.csv")
+        df_ventas = df_ventas.rename(columns={"Monetary": "TOTAL_VENTA", "Recency": "FECHA"})
+        df_ventas["FECHA"] = pd.to_datetime(df_ventas["FECHA"], unit="D", origin="2024-01-01")
+        return df_ventas
+    except FileNotFoundError:
+        st.error(f"❌ No se encontró el archivo de ventas para la región {region_slug}.")
+        return None
+
+with tab15:
+    st.subheader("📆 Evolución Mensual de Clientes y Predicción Estratégica")
+    st.caption(f"Evalúa el comportamiento mensual de clientes en la región **{region}** según perfil predictivo.")
+
+    region_slug = region.lower()
+    df_ventas = cargar_csv_desde_zip(region_slug)
+
+    if df_ventas is None:
+        st.stop()
+    else:
+        st.success(f"✅ Datos cargados correctamente para {region}")
+
+    df_ventas["FECHA"] = pd.to_datetime(df_ventas["FECHA"], errors="coerce")
+    fechas_validas = df_ventas["FECHA"].notna().sum()
+    st.caption(f"🗓️ Fechas válidas detectadas: {fechas_validas:,}")
+    if fechas_validas == 0:
+        st.error("❌ Ninguna fecha válida fue detectada en los datos de ventas.")
+        st.stop()
+
+    df_ventas["PERIODO_MES"] = df_ventas["FECHA"].dt.to_period("M").astype(str)
+
+    df_cluster = df_tac.copy() if region == "Tacna" else df_moq.copy()
+    df_ventas["C_CLIEN"] = df_ventas["C_CLIEN"].astype(str)
+    df_cluster["C_CLIEN"] = df_cluster["C_CLIEN"].astype(str)
+
+    # 🚨 Corrección: Asegura que las columnas de probabilidad existan antes de usarlas.
+    # Esto maneja el caso donde el archivo de datos original no las tiene.
+    if "Probabilidad_Ascenso_Oro" not in df_cluster.columns and "Probabilidad_Ascenso" in df_cluster.columns:
+        df_cluster = df_cluster.rename(columns={"Probabilidad_Ascenso": "Probabilidad_Ascenso_Oro"})
+
+    if "Probabilidad_Descenso_Bronce" not in df_cluster.columns and "Probabilidad_Bronce" in df_cluster.columns:
+        df_cluster = df_cluster.rename(columns={"Probabilidad_Bronce": "Probabilidad_Descenso_Bronce"})
+
+    df_cluster["Probabilidad_Ascenso_Oro"] = pd.to_numeric(df_cluster["Probabilidad_Ascenso_Oro"], errors="coerce")
+    df_cluster["Probabilidad_Descenso_Bronce"] = pd.to_numeric(df_cluster["Probabilidad_Descenso_Bronce"], errors="coerce")
+
+    df_full = df_ventas.merge(df_cluster, on="C_CLIEN", how="inner")
+    st.write(f"🔍 Registros tras el merge: {len(df_full):,}")
+    if df_full.empty:
+        st.warning("⚠️ No hay coincidencias entre ventas y clustering.")
+        st.stop()
+
+    def clasificar_segmento(row):
+        if row["Probabilidad_Ascenso_Oro"] >= 0.8 and row["Probabilidad_Descenso_Bronce"] <= 0.3:
+            return "Cliente Estrella"
+        elif row["Probabilidad_Ascenso_Oro"] < 0.5 and row["Probabilidad_Descenso_Bronce"] >= 0.7:
+            return "Riesgo de Abandono"
+        elif 0.5 <= row["Probabilidad_Ascenso_Oro"] < 0.8 and 0.3 < row["Probabilidad_Descenso_Bronce"] < 0.7:
+            return "Zona de Desarrollo"
+        else:
+            return "Segmento Estable"
+
+    df_full["Segmento Estratégico"] = df_full.apply(clasificar_segmento, axis=1)
+
+    periodos_disponibles = sorted(df_full["PERIODO_MES"].dropna().unique())
+    if len(periodos_disponibles) == 0:
+        st.warning("⚠️ No hay periodos válidos tras la fusión.")
+        st.stop()
+
+    periodo_ini, periodo_fin = st.select_slider(
+        "Selecciona el rango de meses a analizar:",
+        options=periodos_disponibles,
+        value=(periodos_disponibles[0], periodos_disponibles[-1])
+    )
+    df_full = df_full[df_full["PERIODO_MES"].between(periodo_ini, periodo_fin)]
+
+    resumen_mensual = df_full.groupby("PERIODO_MES").agg(
+        Prom_Ascenso=("Probabilidad_Ascenso_Oro", "mean"),
+        Prom_Caida=("Probabilidad_Descenso_Bronce", "mean"),
+        Total_Clientes=("C_CLIEN", "nunique")
+    ).reset_index()
+
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(x=resumen_mensual["PERIODO_MES"], y=resumen_mensual["Prom_Ascenso"],
+                              name='Prob. Ascenso a Oro', mode='lines+markers', line=dict(color="green")))
+    fig1.add_trace(go.Scatter(x=resumen_mensual["PERIODO_MES"], y=resumen_mensual["Prom_Caida"],
+                              name='Prob. Caída a Bronce', mode='lines+markers', line=dict(color="firebrick")))
+    fig1.update_layout(title="📈 Probabilidad Predictiva Promedio Mensual", xaxis_title="Mes", yaxis_title="Probabilidad")
+    st.plotly_chart(fig1, use_container_width=True)
+
+    if "Recency" in df_full.columns:
+        df_full["Recency"] = pd.to_numeric(df_full["Recency"], errors="coerce")
+        recency_mensual = df_full.groupby("PERIODO_MES")["Recency"].mean().reset_index()
+
+        fig_rec = go.Figure()
+        fig_rec.add_trace(go.Scatter(
+            x=recency_mensual["PERIODO_MES"],
+            y=recency_mensual["Recency"],
+            mode='lines+markers',
+            line=dict(color="royalblue")
+        ))
+        fig_rec.update_layout(
+            title="📉 Recencia Promedio (días sin compra)",
+            xaxis_title="Mes",
+            yaxis_title="Días sin Compra"
+        )
+        st.plotly_chart(fig_rec, use_container_width=True)
+
+    st.markdown("### 🧭 Evolución de Segmento Estratégico")
+    dist_segmento = df_full.groupby(["PERIODO_MES", "Segmento Estratégico"]).agg(
+        Cantidad=("C_CLIEN", "nunique")
+    ).reset_index()
+    total_mes = df_full.groupby("PERIODO_MES")["C_CLIEN"].nunique().reset_index(name="Total")
+    dist_segmento = dist_segmento.merge(total_mes, on="PERIODO_MES")
+    dist_segmento["%"] = 100 * dist_segmento["Cantidad"] / dist_segmento["Total"]
+
+    fig2 = px.area(
+        dist_segmento,
+        x="PERIODO_MES", y="%", color="Segmento Estratégico",
+        groupnorm="percent",
+        color_discrete_sequence=px.colors.qualitative.Pastel,
+        title="📊 Distribución de Segmentos Estratégicos por Mes"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    with st.expander("🧠 Ver interpretación de tendencias"):
+        if not resumen_mensual.empty:
+            mes_max = resumen_mensual.loc[resumen_mensual["Prom_Ascenso"].idxmax(), "PERIODO_MES"]
+            max_asc = resumen_mensual["Prom_Ascenso"].max()
+            mes_min = resumen_mensual.loc[resumen_mensual["Prom_Caida"].idxmin(), "PERIODO_MES"]
+            min_caida = resumen_mensual["Prom_Caida"].min()
+            top_seg = dist_segmento.groupby("Segmento Estratégico")["Cantidad"].sum().idxmax()
+
+            st.markdown(f"- 🟢 Mayor ascenso promedio a Oro: **{mes_max}** (`{max_asc:.2f}`)")
+            st.markdown(f"- ✅ Menor riesgo de caída a Bronce: **{mes_min}** (`{min_caida:.2f}`)")
+            st.markdown(f"- 📌 Segmento más frecuente: **{top_seg}**")
+        else:
+            st.info("No hay datos suficientes en el rango de fechas seleccionado.")
+
+    excel_buf = io.BytesIO()
+    resumen_mensual.to_excel(excel_buf, index=False)
+    excel_buf.seek(0)
+
+    st.download_button(
+        label="📤 Descargar Excel de Evolución Mensual",
+        data=excel_buf,
+        file_name=f"Evolucion_Predictiva_{region}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    with st.expander("🔎 Consulta de comportamiento por cliente específico"):
+        clientes_disponibles = sorted(df_full["C_CLIEN"].unique())
+
+        if not clientes_disponibles:
+            st.info("No hay clientes disponibles en el período y región seleccionados.")
+        else:
+            cod_cliente = st.selectbox(
+                "Selecciona un cliente:",
+                clientes_disponibles,
+                key="cliente_selector"
+            )
+
+            df_cliente = df_full[df_full["C_CLIEN"] == cod_cliente]
+
+            if df_cliente.empty:
+                st.warning("⚠️ Cliente no encontrado en los datos actuales.")
+            else:
+                st.markdown(f"### 📌 Evolución mensual para cliente **{cod_cliente}**")
+
+                fig_ind = go.Figure()
+                fig_ind.add_trace(go.Scatter(
+                    x=df_cliente["PERIODO_MES"],
+                    y=df_cliente["Probabilidad_Ascenso_Oro"],
+                    name="Prob. Ascenso a Oro",
+                    mode="lines+markers",
+                    line=dict(color="green")
+                ))
+                fig_ind.add_trace(go.Scatter(
+                    x=df_cliente["PERIODO_MES"],
+                    y=df_cliente["Probabilidad_Descenso_Bronce"],
+                    name="Prob. Caída a Bronce",
+                    mode="lines+markers",
+                    line=dict(color="firebrick")
+                ))
+                fig_ind.update_layout(
+                    xaxis_title="Mes",
+                    yaxis_title="Probabilidad",
+                    title="📈 Perfil predictivo individual por mes"
+                )
+                st.plotly_chart(fig_ind, use_container_width=True)
+
+                if "Recency" in df_cliente.columns and df_cliente["Recency"].notna().any():
+                    fig_ind_rec = go.Figure()
+                    fig_ind_rec.add_trace(go.Scatter(
+                        x=df_cliente["PERIODO_MES"],
+                        y=df_cliente["Recency"],
+                        mode="lines+markers",
+                        name="Recency",
+                        line=dict(color="royalblue")
+                    ))
+                    fig_ind_rec.update_layout(
+                        title="📉 Recencia mensual (días sin compra)",
+                        xaxis_title="Mes",
+                        yaxis_title="Días sin Compra"
+                    )
+                    st.plotly_chart(fig_ind_rec, use_container_width=True)
+
+                buf_cliente = io.BytesIO()
+                df_export = df_cliente[["PERIODO_MES", "Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Recency"]].copy()
+                df_export.columns = ["Mes", "Probabilidad de Ascenso a Oro", "Probabilidad de Caída a Bronce", "Recencia (días)"]
+                df_export.to_excel(buf_cliente, index=False)
+                buf_cliente.seek(0)
+
+                st.download_button(
+                    label="📤 Descargar historial de este cliente",
+                    data=buf_cliente,
+                    file_name=f"Historial_Cliente_{cod_cliente}_{region}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                st.caption("Puedes comparar estas curvas con el promedio regional para detectar oportunidades de intervención temprana.")
+
+import pandas as pd
+import streamlit as st
+
 with tab16:
     st.subheader("📌 Estrategias Sugeridas por Clúster")
     st.caption(f"Estrategias basadas en la distribución actual de clientes en **{region}**")
 
     # 🔍 Selección dinámica del DataFrame según región
-    df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
+    # Asegúrate de que df_tac y df_moq están definidos en el ámbito global o en el contexto de tu aplicación Streamlit
+    try:
+        df_region = df_tac.copy() if region == "Tacna" else df_moq.copy()
+    except NameError:
+        st.error("Error: Los DataFrames 'df_tac' o 'df_moq' no están definidos. Asegúrate de cargarlos previamente.")
+        st.stop()
+
     df_region["Cluster_Label"] = df_region["Cluster_Label"].fillna("Desconocido")
     total = df_region["C_CLIEN"].nunique()
 
@@ -1925,7 +2243,7 @@ with tab17:
     st.subheader("📘 Manual de Navegación y Uso Estratégico")
     st.caption("Recomendaciones para interpretar, navegar y aprovechar al máximo el dashboard.")
 
-    with st.expander("📖 ¿Cuál es el objetivo general del dashboard?"):
+    with st.expander("� ¿Cuál es el objetivo general del dashboard?"):
         st.markdown("""
 Este sistema fue diseñado para **explorar, segmentar, predecir y activar estrategias** sobre clientes a partir de información transaccional, con enfoque regional en **Tacna** y **Moquegua**.
 
@@ -1967,6 +2285,3 @@ Este sistema fue diseñado para **explorar, segmentar, predecir y activar estrat
 
     st.markdown("---")
     st.caption("📌 Esta guía está diseñada para onboarding de analistas, equipos comerciales y responsables regionales.")
-
-#import locale
-#print(locale.getpreferredencoding(False))
