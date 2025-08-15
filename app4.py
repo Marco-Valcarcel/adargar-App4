@@ -741,9 +741,6 @@ with tab4:
     """
     st.markdown(tabla_html, unsafe_allow_html=True)
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-
 def plot_boxplots_rfm(df, region):
     rfm_vars = ["Recency", "Frequency", "Monetary"]
 
