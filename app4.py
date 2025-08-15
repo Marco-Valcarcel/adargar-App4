@@ -12,10 +12,23 @@ st.set_page_config(layout="wide")
 
 st.write("✅ App iniciada correctamente – Tablero App3")
 
-import streamlit as st
+# 1. Este bloque de código para forzar la instalación de seaborn
+import subprocess
+import sys
+
+def install_seaborn():
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "seaborn"])
+    except subprocess.CalledProcessError as e:
+        print(f"Error al instalar seaborn: {e}")
+
+# Llama a la función de instalación
+install_seaborn()
+
+# 2. Ahora, sí puedes importar todas tus librerías
+import seaborn as sns
 import pandas as pd
 import numpy as np
-import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import io
@@ -220,7 +233,7 @@ with st.sidebar:
         st.info(f"ℹ️ Las métricas de clientes se activarán una vez se cargue el dataframe. Error: {e}")
 
 def interpretar_histograma_rfm(df, variable, region=""):
-    import numpy as np
+
 
     st.markdown(f"### 📌 Interpretación de la variable **{variable}** en {region}")
 
@@ -257,7 +270,6 @@ def interpretar_histograma_probabilidad(df, columna_probabilidad, region=""):
     """
     Función de interpretación automática para cualquier columna de probabilidad.
     """
-    import numpy as np
 
     if columna_probabilidad not in df.columns:
         st.error(f"❌ La columna '{columna_probabilidad}' no se encuentra en el DataFrame.")
@@ -616,8 +628,6 @@ def ordenar_segmentos_seguro(series_segmentos, nombre_var="Cluster_Label"):
     # Reindexamos la serie con el orden final y devolvemos el resultado
     return series_segmentos.reindex(orden_final)
 
-import plotly.express as px
-
 def graficar_tamaño_cluster(df, region=""):
     """
     Función para graficar el tamaño de los clústeres usando Plotly.
@@ -755,9 +765,6 @@ with tab4:
     </div>
     """
     st.markdown(tabla_html, unsafe_allow_html=True)
-
-import plotly.express as px
-import pandas as pd
 
 def plot_boxplots_rfm(df, region):
     """
@@ -1084,8 +1091,6 @@ with tab7:
 df_tac = rfm[rfm["Región"] == "Tacna"].copy()
 df_moq = rfm[rfm["Región"] == "Moquegua"].copy()
 
-import plotly.express as px
-
 # Función para interpretar las predicciones, asumiendo que existe
 # Es recomendable definir esta función en otro bloque de código.
 def interpretar_predicciones(region, df):
@@ -1257,8 +1262,6 @@ with tab8:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-import plotly.express as px
-
 # Nueva función para la interpretación de histogramas RFM
 def interpretar_histograma_rfm(df, variable, region):
     st.markdown("### 🔍 Análisis de la distribución por clúster:")
@@ -1336,8 +1339,6 @@ with tab9:
     with st.expander("🧠 Ver interpretación por clúster"):
         # 🚨 Llamada a la nueva función de interpretación
         interpretar_histograma_rfm(df_region, variable, region)
-
-import plotly.express as px
 
 # 🚨 Nueva función para interpretar los violin plots
 def interpretar_violin_rfm(df, variable, region):
@@ -1535,9 +1536,6 @@ with tab11:
 
     st.plotly_chart(fig, use_container_width=True)
 
-import plotly.graph_objects as go
-import numpy as np
-
 with tab12:
     st.subheader("🧬 Mapa de Correlación – RFM y Variables Predictivas")
     st.caption(f"Analiza la relación entre las métricas RFM y las probabilidades de evolución de los clientes para la región **{region}**.")
@@ -1600,10 +1598,6 @@ with tab12:
         mejor_factor_caida = top_corr_caida.idxmax()
         valor_max_caida = top_corr_caida.max()
         st.warning(f"📉 La métrica más correlacionada con la **probabilidad de caída a Bronce** es **{mejor_factor_caida}** (`{valor_max_caida:.2f}`). Identifica el factor principal de riesgo para campañas de retención o reactivación.")
-
-import plotly.graph_objects as go
-import pandas as pd
-import streamlit as st
 
 # 🚨 Nueva función para la interpretación del gráfico de radar
 def interpretar_radar_rfm(df, region):
@@ -1700,11 +1694,6 @@ with tab13:
 
     # 🧠 Interpretación automática
     interpretar_radar_rfm(df_region, region)
-
-import plotly.express as px
-import pandas as pd
-import streamlit as st
-import io
 
 # 🚨 Nueva función de interpretación comparativa
 def interpretar_comparativa_regional(df):
@@ -1860,12 +1849,6 @@ with tab14:
         file_name="Comparativa_Regional_Tacna_vs_Moquegua.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-import io
-import streamlit as st
 
 def cargar_csv_desde_zip(region_slug):
     """Función simulada para cargar datos de ventas.
@@ -2090,9 +2073,6 @@ with tab15:
                 )
 
                 st.caption("Puedes comparar estas curvas con el promedio regional para detectar oportunidades de intervención temprana.")
-
-import pandas as pd
-import streamlit as st
 
 with tab16:
     st.subheader("📌 Estrategias Sugeridas por Clúster")
