@@ -6,3 +6,4 @@ scikit-learn
 seaborn
 openpyxl
 fpdf
+matplotlib
