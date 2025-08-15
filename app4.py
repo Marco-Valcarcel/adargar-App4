@@ -1783,25 +1783,6 @@ with tab14:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-import io
-
-def cargar_csv_desde_zip(region_slug):
-    """Función simulada para cargar datos de ventas. En una implementación real, se adaptaría."""
-    try:
-        # Aquí se cargaría un archivo de ventas real
-        # df = pd.read_csv(f"ventas_{region_slug}.csv")
-        # Por ahora, usamos el archivo de ejemplo para simular la estructura
-        df_ventas = pd.read_csv("clientes_segmentados_moquegua.csv")
-        df_ventas = df_ventas.rename(columns={"Monetary": "TOTAL_VENTA", "Recency": "FECHA"})
-        df_ventas["FECHA"] = pd.to_datetime(df_ventas["FECHA"], unit="D", origin="2024-01-01")
-        return df_ventas
-    except FileNotFoundError:
-        st.error(f"❌ No se encontró el archivo de ventas para la región {region_slug}.")
-        return None
-
 with tab15:
     st.subheader("📆 Evolución Mensual de Clientes y Predicción Estratégica")
     st.caption(f"Evalúa el comportamiento mensual de clientes en la región **{region}** según perfil predictivo.")
@@ -1827,7 +1808,7 @@ with tab15:
     df_ventas["C_CLIEN"] = df_ventas["C_CLIEN"].astype(str)
     df_cluster["C_CLIEN"] = df_cluster["C_CLIEN"].astype(str)
 
-    # 🚨 Actualización de nombres de columnas
+    # Actualización de nombres de columnas
     df_cluster["Probabilidad_Ascenso_Oro"] = pd.to_numeric(df_cluster["Probabilidad_Ascenso_Oro"], errors="coerce")
     df_cluster["Probabilidad_Descenso_Bronce"] = pd.to_numeric(df_cluster["Probabilidad_Descenso_Bronce"], errors="coerce")
 
@@ -1838,7 +1819,7 @@ with tab15:
         st.stop()
 
     def clasificar_segmento(row):
-        # 🚨 Actualización de la lógica de clasificación
+        # Actualización de la lógica de clasificación
         if row["Probabilidad_Ascenso_Oro"] >= 0.8 and row["Probabilidad_Descenso_Bronce"] <= 0.3:
             return "Cliente Estrella"
         elif row["Probabilidad_Ascenso_Oro"] < 0.5 and row["Probabilidad_Descenso_Bronce"] >= 0.7:
@@ -1863,13 +1844,13 @@ with tab15:
     df_full = df_full[df_full["PERIODO_MES"].between(periodo_ini, periodo_fin)]
 
     resumen_mensual = df_full.groupby("PERIODO_MES").agg(
-        # 🚨 Actualización de nombres de columnas
+        # Actualización de nombres de columnas
         Prom_Ascenso=("Probabilidad_Ascenso_Oro", "mean"),
         Prom_Caida=("Probabilidad_Descenso_Bronce", "mean"),
         Total_Clientes=("C_CLIEN", "nunique")
     ).reset_index()
 
-    # 🚨 Actualización de nombres en el gráfico
+    # Actualización de nombres en el gráfico
     fig1 = go.Figure()
     fig1.add_trace(go.Scatter(x=resumen_mensual["PERIODO_MES"], y=resumen_mensual["Prom_Ascenso"],
                               name='Prob. Ascenso a Oro', mode='lines+markers', line=dict(color="green")))
@@ -1938,81 +1919,81 @@ with tab15:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-with st.expander("🔎 Consulta de comportamiento por cliente específico"):
-    clientes_disponibles = sorted(df_full["C_CLIEN"].unique())
+    # 🚨 Esta sección ha sido movida dentro del with tab15:
+    with st.expander("🔎 Consulta de comportamiento por cliente específico"):
+        clientes_disponibles = sorted(df_full["C_CLIEN"].unique())
 
-    if not clientes_disponibles:
-        st.info("No hay clientes disponibles en el período y región seleccionados.")
-    else:
-        cod_cliente = st.selectbox(
-            "Selecciona un cliente:",
-            clientes_disponibles,
-            key="cliente_selector"
-        )
-
-        df_cliente = df_full[df_full["C_CLIEN"] == cod_cliente]
-
-        if df_cliente.empty:
-            st.warning("⚠️ Cliente no encontrado en los datos actuales.")
+        if not clientes_disponibles:
+            st.info("No hay clientes disponibles en el período y región seleccionados.")
         else:
-            st.markdown(f"### 📌 Evolución mensual para cliente **{cod_cliente}**")
-
-            # 🔹 Gráfico de perfil predictivo
-            fig_ind = go.Figure()
-            fig_ind.add_trace(go.Scatter(
-                x=df_cliente["PERIODO_MES"],
-                y=df_cliente["Probabilidad_Ascenso_Oro"], # 🚨 Actualización de nombre
-                name="Prob. Ascenso a Oro",
-                mode="lines+markers",
-                line=dict(color="green")
-            ))
-            fig_ind.add_trace(go.Scatter(
-                x=df_cliente["PERIODO_MES"],
-                y=df_cliente["Probabilidad_Descenso_Bronce"], # 🚨 Actualización de nombre
-                name="Prob. Caída a Bronce",
-                mode="lines+markers",
-                line=dict(color="firebrick")
-            ))
-            fig_ind.update_layout(
-                xaxis_title="Mes",
-                yaxis_title="Probabilidad",
-                title="📈 Perfil predictivo individual por mes"
+            cod_cliente = st.selectbox(
+                "Selecciona un cliente:",
+                clientes_disponibles,
+                key="cliente_selector"
             )
-            st.plotly_chart(fig_ind, use_container_width=True)
 
-            # 🔹 Gráfico de recencia mensual
-            if "Recency" in df_cliente.columns and df_cliente["Recency"].notna().any():
-                fig_ind_rec = go.Figure()
-                fig_ind_rec.add_trace(go.Scatter(
+            df_cliente = df_full[df_full["C_CLIEN"] == cod_cliente]
+
+            if df_cliente.empty:
+                st.warning("⚠️ Cliente no encontrado en los datos actuales.")
+            else:
+                st.markdown(f"### 📌 Evolución mensual para cliente **{cod_cliente}**")
+
+                # 🔹 Gráfico de perfil predictivo
+                fig_ind = go.Figure()
+                fig_ind.add_trace(go.Scatter(
                     x=df_cliente["PERIODO_MES"],
-                    y=df_cliente["Recency"],
+                    y=df_cliente["Probabilidad_Ascenso_Oro"],
+                    name="Prob. Ascenso a Oro",
                     mode="lines+markers",
-                    name="Recency",
-                    line=dict(color="royalblue")
+                    line=dict(color="green")
                 ))
-                fig_ind_rec.update_layout(
-                    title="📉 Recencia mensual (días sin compra)",
+                fig_ind.add_trace(go.Scatter(
+                    x=df_cliente["PERIODO_MES"],
+                    y=df_cliente["Probabilidad_Descenso_Bronce"],
+                    name="Prob. Caída a Bronce",
+                    mode="lines+markers",
+                    line=dict(color="firebrick")
+                ))
+                fig_ind.update_layout(
                     xaxis_title="Mes",
-                    yaxis_title="Días sin Compra"
+                    yaxis_title="Probabilidad",
+                    title="📈 Perfil predictivo individual por mes"
                 )
-                st.plotly_chart(fig_ind_rec, use_container_width=True)
+                st.plotly_chart(fig_ind, use_container_width=True)
 
-            # 🔸 Botón de exportación individual
-            buf_cliente = io.BytesIO()
-            # 🚨 Actualización de nombres de columnas para la exportación
-            df_export = df_cliente[["PERIODO_MES", "Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Recency"]].copy()
-            df_export.columns = ["Mes", "Probabilidad de Ascenso a Oro", "Probabilidad de Caída a Bronce", "Recencia (días)"]
-            df_export.to_excel(buf_cliente, index=False)
-            buf_cliente.seek(0)
+                # 🔹 Gráfico de recencia mensual
+                if "Recency" in df_cliente.columns and df_cliente["Recency"].notna().any():
+                    fig_ind_rec = go.Figure()
+                    fig_ind_rec.add_trace(go.Scatter(
+                        x=df_cliente["PERIODO_MES"],
+                        y=df_cliente["Recency"],
+                        mode="lines+markers",
+                        name="Recency",
+                        line=dict(color="royalblue")
+                    ))
+                    fig_ind_rec.update_layout(
+                        title="📉 Recencia mensual (días sin compra)",
+                        xaxis_title="Mes",
+                        yaxis_title="Días sin Compra"
+                    )
+                    st.plotly_chart(fig_ind_rec, use_container_width=True)
 
-            st.download_button(
-                label="📤 Descargar historial de este cliente",
-                data=buf_cliente,
-                file_name=f"Historial_Cliente_{cod_cliente}_{region}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                # 🔸 Botón de exportación individual
+                buf_cliente = io.BytesIO()
+                df_export = df_cliente[["PERIODO_MES", "Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Recency"]].copy()
+                df_export.columns = ["Mes", "Probabilidad de Ascenso a Oro", "Probabilidad de Caída a Bronce", "Recencia (días)"]
+                df_export.to_excel(buf_cliente, index=False)
+                buf_cliente.seek(0)
 
-            st.caption("Puedes comparar estas curvas con el promedio regional para detectar oportunidades de intervención temprana.")
+                st.download_button(
+                    label="📤 Descargar historial de este cliente",
+                    data=buf_cliente,
+                    file_name=f"Historial_Cliente_{cod_cliente}_{region}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                st.caption("Puedes comparar estas curvas con el promedio regional para detectar oportunidades de intervención temprana.")
 
 with tab16:
     st.subheader("📌 Estrategias Sugeridas por Clúster")
