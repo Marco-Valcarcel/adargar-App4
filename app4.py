@@ -10,7 +10,7 @@ Original file is located at
 import streamlit as st
 st.set_page_config(layout="wide")
 
-st.write("✅ App iniciada correctamente – Tablero App3")
+st.write("✅ App iniciada correctamente – Tablero App4")
 
 import seaborn as sns
 import pandas as pd
@@ -185,6 +185,7 @@ def ordenar_segmentos_seguro(df_agrupado, orden=None, nombre_var="Cluster_Label"
 
 # st.write("✅ App iniciada correctamente – App4")
 # 🎛️ Sidebar profesional
+# 🎛️ Sidebar profesional
 with st.sidebar:
     # Asegúrate de tener el logo de Adargar en la carpeta de tu repositorio
     st.image("logo_adargar.jpg", width=190)
@@ -192,27 +193,35 @@ with st.sidebar:
     st.markdown("### 📊 App4 – Evolución Inteligente de Clientes para Adargar-Tacna")
     st.caption("Solución diseñada por Ing. Marco Valcárcel")
 
+    # Inicializamos st.session_state si no existe
+    if "df_to_display" not in st.session_state:
+        st.session_state.df_to_display = df_tac  # O tu DataFrame por defecto
+
     # Selección de región
-    # Se ha cambiado el key para evitar conflictos si existe otro con el mismo nombre.
-    region = st.selectbox("📍 Selecciona región", ["Tacna", "Moquegua"], key="region_selector")
+    region = st.selectbox(
+        "📍 Selecciona región",
+        ["Tacna", "Moquegua"],
+        key="region_selector",
+    )
 
     # --- CORRECCIÓN CRÍTICA ---
-    # Asignamos el DataFrame a una variable que se usará en todo el código.
-    # El resto de tu aplicación debe usar esta variable 'df_to_display'.
-    # Si tus DataFrames ya están cargados como df_tac y df_moq, esta línea es la clave.
-    df_to_display = df_tac if region == "Tacna" else df_moq
+    # Actualizamos el DataFrame en st.session_state cada vez que la región cambie
+    if region == "Tacna":
+        st.session_state.df_to_display = df_tac
+    else: # Moquegua
+        st.session_state.df_to_display = df_moq
 
     st.markdown("---")
     st.markdown(f"### 📌 Clientes por Nivel ({region})")
 
     try:
-        # Ahora, todas las métricas usan el DataFrame filtrado `df_to_display`
-        total = df_to_display["C_CLIEN"].nunique()
-        diamante = df_to_display.query("Cluster_Label == 'Diamante'")["C_CLIEN"].nunique()
-        oro = df_to_display.query("Cluster_Label == 'Oro'")["C_CLIEN"].nunique()
-        plata = df_to_display.query("Cluster_Label == 'Plata'")["C_CLIEN"].nunique()
-        cobre = df_to_display.query("Cluster_Label == 'Cobre'")["C_CLIEN"].nunique()
-        bronce = df_to_display.query("Cluster_Label == 'Bronce'")["C_CLIEN"].nunique()
+        # Ahora, todas las métricas usan el DataFrame filtrado de st.session_state
+        total = st.session_state.df_to_display["C_CLIEN"].nunique()
+        diamante = st.session_state.df_to_display.query("Cluster_Label == 'Diamante'")["C_CLIEN"].nunique()
+        oro = st.session_state.df_to_display.query("Cluster_Label == 'Oro'")["C_CLIEN"].nunique()
+        plata = st.session_state.df_to_display.query("Cluster_Label == 'Plata'")["C_CLIEN"].nunique()
+        cobre = st.session_state.df_to_display.query("Cluster_Label == 'Cobre'")["C_CLIEN"].nunique()
+        bronce = st.session_state.df_to_display.query("Cluster_Label == 'Bronce'")["C_CLIEN"].nunique()
 
         st.metric("🟡 Total únicos", total)
         st.metric("💎 Diamante", diamante)
@@ -224,19 +233,18 @@ with st.sidebar:
         st.info(f"ℹ️ Las métricas de clientes se activarán una vez se cargue el dataframe. Error: {e}")
 
 # --- GUÍA PARA EL RESTO DE TU CÓDIGO ---
-# En las siguientes secciones de tu dashboard, donde generas gráficos o tablas
-# (por ejemplo, el gráfico de violín o cualquier otro), DEBES usar la variable
-# `df_to_display` en lugar de `df_tac` o `df_moq`.
-#
+# En las siguientes secciones de tu dashboard, donde generas gráficos o tablas,
+# DEBES usar la variable `st.session_state.df_to_display` en lugar de
+# df_tac o df_moq.
 # Por ejemplo, si tenías:
 # fig_violin = px.violin(df_tac, ...)
 # Debes cambiarlo a:
-# fig_violin = px.violin(df_to_display, ...)
+# fig_violin = px.violin(st.session_state.df_to_display, ...)
 #
 # Si tenías:
 # st.dataframe(df_moq)
 # Debes cambiarlo a:
-# st.dataframe(df_to_display)
+# st.dataframe(st.session_state.df_to_display)
 
 def interpretar_histograma_rfm(df, variable, region=""):
 
