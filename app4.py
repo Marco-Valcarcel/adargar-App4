@@ -1636,32 +1636,83 @@ def interpretar_violin_rfm(df, variable, region):
                 else:
                     st.info(f"- Concentración de gasto en valores más bajos. Oportunidad de up-selling.")
 
-# 🚨 Nueva función para interpretar los KDE plots
+from scipy.stats import gaussian_kde
+
 def interpretar_kde_rfm(df, variable, region):
+    """
+    Interpreta el comportamiento de los clusters basado en un KDE Plot para una variable RFM.
+
+    Args:
+        df (pd.DataFrame): DataFrame de clientes con la variable RFM y los clusters.
+        variable (str): Nombre de la variable RFM ('Recency', 'Frequency', 'Monetary').
+        region (str): La región seleccionada para la interpretación.
+    """
+
     st.markdown("### 🧠 Interpretación de la Densidad (KDE Plot)")
     st.markdown(f"Las curvas de densidad suavizada (KDE) muestran la **concentración de clientes** en los valores de `{variable}`.")
+
+    # Se define el orden de los clusters para una presentación consistente
     orden_clusters = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
 
+    # Se define un umbral de recencia para distinguir entre 'reciente' e 'inactivo'
+    # Este valor puede ser ajustado según el negocio.
+    # En este caso, un pico en recencia < 30 días se considera un cliente reciente.
+    umbral_recencia_reciente = 30
+
     for label in orden_clusters:
+        # Se filtra el subconjunto de datos para el cluster actual
         subset = df[df["Cluster_Label"] == label][variable].dropna()
+
         if not subset.empty:
-            media = subset.mean()
             st.markdown(f"**{label}**:")
-            if variable == "Recency":
-                if media < 30:
-                    st.success(f"- La curva tiene un pico en valores bajos, indicando alta concentración de clientes recientes.")
-                else:
-                    st.info(f"- La curva tiene un pico en valores altos, indicando inactividad en la mayoría de clientes.")
-            elif variable == "Frequency":
-                if media > 5:
-                    st.success(f"- La curva se extiende a la derecha, mostrando que muchos clientes compran frecuentemente.")
-                else:
-                    st.info(f"- La curva se concentra en valores bajos, indicando que la mayoría de clientes tienen pocas compras.")
-            elif variable == "Monetary":
-                if media > 1000:
-                    st.success(f"- La curva muestra una cola larga a la derecha, indicando un grupo de clientes con muy alto gasto.")
-                else:
-                    st.info(f"- La curva se concentra en valores bajos, indicando que la mayoría de los clientes tienen un gasto menor.")
+
+            # --- Lógica de corrección ---
+            # La interpretación de un KDE se basa en el pico de la densidad, no en el promedio.
+            # 1. Se calcula el KDE para el subconjunto de datos.
+            # 2. Se encuentra el punto en el eje X donde la densidad es máxima.
+            #    Este punto representa el valor más frecuente (la moda) de la distribución.
+
+            # Se genera una serie de 1000 puntos para evaluar la función KDE
+            x_grid = np.linspace(subset.min(), subset.max(), 1000)
+
+            # Se calcula la función de densidad del kernel
+            try:
+                kde = gaussian_kde(subset)
+                # Se evalúa la función KDE en los puntos de la cuadrícula
+                y_kde = kde.evaluate(x_grid)
+
+                # Se encuentra el índice del valor máximo en el eje Y (densidad)
+                idx_pico = np.argmax(y_kde)
+                # Se obtiene el valor en el eje X correspondiente al pico
+                valor_pico = x_grid[idx_pico]
+
+                if variable == "Recency":
+                    # Si el pico de la curva está en un valor bajo, la interpretación es positiva
+                    if valor_pico < umbral_recencia_reciente:
+                        st.success(f"- La curva tiene un pico en valores bajos ({valor_pico:.2f}), indicando alta concentración de clientes recientes.")
+                    # Si el pico de la curva está en un valor alto, la interpretación es de inactividad
+                    else:
+                        st.info(f"- La curva tiene un pico en valores altos ({valor_pico:.2f}), indicando inactividad en la mayoría de clientes.")
+
+                elif variable == "Frequency":
+                    # Lógica similar, pero basada en la frecuencia de compra
+                    if valor_pico > 5:
+                        st.success(f"- La curva se extiende a la derecha, mostrando que muchos clientes compran frecuentemente.")
+                    else:
+                        st.info(f"- La curva se concentra en valores bajos, indicando que la mayoría de clientes tienen pocas compras.")
+
+                elif variable == "Monetary":
+                    # Lógica similar, pero basada en el gasto monetario
+                    if valor_pico > 1000:
+                        st.success(f"- La curva muestra una cola larga a la derecha, indicando un grupo de clientes con muy alto gasto.")
+                    else:
+                        st.info(f"- La curva se concentra en valores bajos, indicando que la mayoría de los clientes tienen un gasto menor.")
+
+            except np.linalg.LinAlgError:
+                # Manejar el caso donde no se puede calcular el KDE (ej. datos insuficientes o un solo valor)
+                st.warning(f"- No se pudo calcular la densidad de la curva para el clúster **{label}**.")
+
+
 
 # --- Bloque para tab10 ---
 with tab10:
