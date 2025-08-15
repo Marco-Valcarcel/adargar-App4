@@ -1328,14 +1328,31 @@ with tab9:
 
 # 🚨 Nueva función para interpretar los violin plots
 def interpretar_violin_rfm(df, variable, region):
+    """
+    Genera la interpretación de un Violin Plot para los clusters RFM.
+
+    Args:
+        df (pd.DataFrame): El DataFrame con los datos de clientes.
+        variable (str): La variable a interpretar ('Recency', 'Frequency', 'Monetary').
+        region (str): La región seleccionada.
+    """
     st.markdown("### 🧠 Interpretación de la Distribución (Violin Plot)")
     st.markdown(f"El ancho del gráfico de violín representa la **densidad de clientes** en cada valor de `{variable}`.")
 
     orden_clusters = ["Diamante", "Oro", "Plata", "Cobre", "Bronce"]
 
     for label in orden_clusters:
+        # 1. Obtener el subconjunto de datos para el cluster y la variable
         subset = df[df["Cluster_Label"] == label][variable].dropna()
-        if not subset.empty:
+
+        # 2. 🚨 VERIFICAR SI EL DATAFRAME ESTÁ VACÍO 🚨
+        if subset.empty:
+            # 3. Si está vacío, mostrar un mensaje de advertencia
+            st.markdown(f"**{label}**:")
+            st.warning(f"No hay clientes para este segmento en la región **{region}**.")
+
+        else:
+            # 4. Si hay datos, proceder con la lógica de interpretación
             media = subset.mean()
             q1 = subset.quantile(0.25)
             q3 = subset.quantile(0.75)
