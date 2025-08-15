@@ -3,5 +3,7 @@ pandas
 numpy
 plotly
 scikit-learn
+seaborn
 openpyxl
 fpdf
+
