@@ -12,20 +12,6 @@ st.set_page_config(layout="wide")
 
 st.write("✅ App iniciada correctamente – Tablero App3")
 
-# 1. Este bloque de código para forzar la instalación de seaborn
-import subprocess
-import sys
-
-def install_seaborn():
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "seaborn"])
-    except subprocess.CalledProcessError as e:
-        print(f"Error al instalar seaborn: {e}")
-
-# Llama a la función de instalación
-install_seaborn()
-
-# 2. Ahora, sí puedes importar todas tus librerías
 import seaborn as sns
 import pandas as pd
 import numpy as np
