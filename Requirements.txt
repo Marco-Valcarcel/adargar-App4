@@ -4,6 +4,6 @@ numpy
 plotly
 scikit-learn
 seaborn
+matplotlib
 openpyxl
 fpdf
-matplotlib
