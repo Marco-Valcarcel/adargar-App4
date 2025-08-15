@@ -63,9 +63,6 @@ rfm = pd.concat([df_tac, df_moq], ignore_index=True)
 rfm.columns = rfm.columns.str.strip()
 
 # 🧠 4. Entrenamiento predictivo
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
 # Validar columna de clúster. Ahora el clúster objetivo es 'Cluster_Label'.
 if "Cluster_Label" in rfm.columns:
     y = rfm["Cluster_Label"]
@@ -100,6 +97,12 @@ rfm["Probabilidad_Descenso_Bronce"] = rfm["Probabilidades"].apply(lambda p: roun
 # 💾 8. Actualizar df_tac y df_moq ya enriquecidos con predicción
 df_tac = rfm[rfm["Region"] == "Tacna"].copy()
 df_moq = rfm[rfm["Region"] == "Moquegua"].copy()
+
+# 💾 9. Inicializar st.session_state con los dataframes enriquecidos
+if "df_to_display" not in st.session_state:
+    st.session_state.df_tac = df_tac
+    st.session_state.df_moq = df_moq
+    st.session_state.df_to_display = df_tac # Por defecto, mostrar Tacna
 
 # ✅ Validaciones de columnas críticas por región
 assert "Cluster_Label" in df_tac.columns and df_tac["Cluster_Label"].notna().all(), "❌ Falta columna o hay valores nulos en df_tac['Cluster_Label']"
@@ -178,13 +181,6 @@ def ordenar_segmentos_seguro(df_agrupado, orden=None, nombre_var="Cluster_Label"
     return df_agrupado.reindex(orden)
 
 # 🧭 Layout general y encabezado inicial
-# st.set_page_config(layout="wide") # Ya se estableció en un bloque anterior
-
-# st.title("📊 Dashboard Predictivo – Comercial Adargar")
-# st.caption("Análisis estratégico de clientes basado en RFM, clustering y modelos de evolución (2024–2025)")
-
-# st.write("✅ App iniciada correctamente – App4")
-# 🎛️ Sidebar profesional
 # 🎛️ Sidebar profesional
 with st.sidebar:
     # Asegúrate de tener el logo de Adargar en la carpeta de tu repositorio
@@ -192,10 +188,6 @@ with st.sidebar:
 
     st.markdown("### 📊 App4 – Evolución Inteligente de Clientes para Adargar-Tacna")
     st.caption("Solución diseñada por Ing. Marco Valcárcel")
-
-    # Inicializamos st.session_state si no existe
-    if "df_to_display" not in st.session_state:
-        st.session_state.df_to_display = df_tac  # O tu DataFrame por defecto
 
     # Selección de región
     region = st.selectbox(
@@ -207,9 +199,9 @@ with st.sidebar:
     # --- CORRECCIÓN CRÍTICA ---
     # Actualizamos el DataFrame en st.session_state cada vez que la región cambie
     if region == "Tacna":
-        st.session_state.df_to_display = df_tac
+        st.session_state.df_to_display = st.session_state.df_tac
     else: # Moquegua
-        st.session_state.df_to_display = df_moq
+        st.session_state.df_to_display = st.session_state.df_moq
 
     st.markdown("---")
     st.markdown(f"### 📌 Clientes por Nivel ({region})")
@@ -232,116 +224,214 @@ with st.sidebar:
     except Exception as e:
         st.info(f"ℹ️ Las métricas de clientes se activarán una vez se cargue el dataframe. Error: {e}")
 
-# --- GUÍA PARA EL RESTO DE TU CÓDIGO ---
-# En las siguientes secciones de tu dashboard, donde generas gráficos o tablas,
-# DEBES usar la variable `st.session_state.df_to_display` en lugar de
-# df_tac o df_moq.
-# Por ejemplo, si tenías:
-# fig_violin = px.violin(df_tac, ...)
-# Debes cambiarlo a:
-# fig_violin = px.violin(st.session_state.df_to_display, ...)
-#
-# Si tenías:
-# st.dataframe(df_moq)
-# Debes cambiarlo a:
-# st.dataframe(st.session_state.df_to_display)
-
 def interpretar_histograma_rfm(df, variable, region=""):
+    """
+    Genera una interpretación de las métricas RFM (Recencia, Frecuencia, Monetario)
+    para cada segmento de clientes, basándose en el análisis de histogramas.
+    Esta función ahora utiliza st.session_state para garantizar que la
+    interpretación se basa en los datos de la región seleccionada.
 
+    Args:
+        df (pd.DataFrame): Este parámetro se mantiene por compatibilidad, pero
+                          la función ahora carga el DataFrame desde st.session_state.
+        variable (str): La variable RFM a analizar ('Recency', 'Frequency' o 'Monetary').
+        region (str): La región a la que corresponden los datos.
+    """
 
     st.markdown(f"### 📌 Interpretación de la variable **{variable}** en {region}")
 
-    grupos = df.groupby("Cluster_Label")[variable]
+    # Usamos el DataFrame del estado de la sesión para que los datos sean dinámicos
+    if 'df_to_display' in st.session_state:
+        df_a_usar = st.session_state.df_to_display
+    else:
+        # En caso de que no exista, usamos el DataFrame pasado como argumento (fallback)
+        df_a_usar = df
+        st.warning("⚠️ No se encontró 'df_to_display' en st.session_state. Usando el DataFrame por defecto.")
 
-    for segmento, valores in grupos:
-        desc = valores.describe()
-        media = desc["mean"]
-        mediana = desc["50%"]
-        std = desc["std"]
-        asimetría = valores.skew()
-        dispersión = "alta" if std > valores.mean() * 0.5 else "moderada" if std > 0 else "baja"
+    # Verificar si la columna existe en el DataFrame para evitar errores
+    if variable not in df_a_usar.columns:
+        st.error(f"❌ La columna '{variable}' no se encuentra en el DataFrame de la región.")
+        return
 
-        st.markdown(f"#### 🎯 Segmento **{segmento}**")
-        st.markdown(
-            f"- Media: **{media:.2f}**, Mediana: **{mediana:.2f}**"
-            f"\n- Desviación estándar: **{std:.2f}** ({dispersión})"
-            f"\n- Asimetría: **{asimetría:.2f}** {'🔺 positiva' if asimetría > 0 else '🔻 negativa' if asimetría < 0 else '⚖️ simétrica'}"
-        )
+    try:
+        # 📊 Agrupar el DataFrame por segmento y seleccionar la variable de interés
+        grupos = df_a_usar.groupby("Cluster_Label")[variable]
 
-        # Comentario general
-        if asimetría > 1:
-            st.info("Distribución sesgada a la derecha: mayoría de valores bajos con algunos muy altos.")
-        elif asimetría < -1:
-            st.info("Distribución sesgada a la izquierda: mayoría de clientes con valores altos en esta métrica.")
-        elif dispersión == "alta":
-            st.info("Existe alta variabilidad entre los clientes de este segmento.")
-        else:
-            st.info("Distribución relativamente equilibrada.")
+        # 📈 Iterar sobre cada segmento y calcular métricas estadísticas clave
+        for segmento, valores in grupos:
+            desc = valores.describe()
+            media = desc["mean"]
+            mediana = desc["50%"]
+            std = desc["std"]
+            asimetría = valores.skew()
+
+            # Evaluar la dispersión (variabilidad) de los datos
+            dispersión = "alta" if std > valores.mean() * 0.5 else "moderada" if std > 0 else "baja"
+
+            # ✍️ Mostrar las métricas calculadas
+            st.markdown(f"#### 🎯 Segmento **{segmento}**")
+            st.markdown(
+                f"- Media: **{media:.2f}**, Mediana: **{mediana:.2f}**"
+                f"\n- Desviación estándar: **{std:.2f}** ({dispersión})"
+                f"\n- Asimetría: **{asimetría:.2f}** {'🔺 positiva' if asimetría > 0 else '🔻 negativa' if asimetría < 0 else '⚖️ simétrica'}"
+            )
+
+            # 🧠 Generar una interpretación basada en el valor de asimetría y dispersión
+            if asimetría > 1:
+                st.info("Distribución sesgada a la derecha: mayoría de valores bajos con algunos muy altos.")
+            elif asimetría < -1:
+                st.info("Distribución sesgada a la izquierda: mayoría de clientes con valores altos en esta métrica.")
+            elif dispersión == "alta":
+                st.info("Existe alta variabilidad entre los clientes de este segmento.")
+            else:
+                st.info("Distribución relativamente equilibrada.")
+    except Exception as e:
+        st.error(f"Ocurrió un error al generar la interpretación: {e}")
 
     st.caption("💡 Esta lectura puede ayudarte a detectar segmentos con outliers o con comportamiento atípico para intervenciones personalizadas.")
 
 def interpretar_histograma_probabilidad(df, columna_probabilidad, region=""):
     """
     Función de interpretación automática para cualquier columna de probabilidad.
-    """
+    Ahora utiliza st.session_state para garantizar que la interpretación
+    se basa en los datos de la región seleccionada en el sidebar.
 
-    if columna_probabilidad not in df.columns:
-        st.error(f"❌ La columna '{columna_probabilidad}' no se encuentra en el DataFrame.")
+    Args:
+        df (pd.DataFrame): Este parámetro se mantiene por compatibilidad, pero
+                          la función ahora carga el DataFrame desde st.session_state.
+        columna_probabilidad (str): El nombre de la columna que contiene las probabilidades.
+        region (str): La región a la que corresponden los datos.
+    """
+    st.markdown("---")
+
+    # Usamos el DataFrame del estado de la sesión para que los datos sean dinámicos
+    if 'df_to_display' in st.session_state:
+        df_a_usar = st.session_state.df_to_display
+    else:
+        # En caso de que no exista, usamos el DataFrame pasado como argumento (fallback)
+        df_a_usar = df
+        st.warning("⚠️ No se encontró 'df_to_display' en st.session_state. Usando el DataFrame por defecto.")
+
+    # Verificar si la columna existe en el DataFrame para evitar errores
+    if columna_probabilidad not in df_a_usar.columns:
+        st.error(f"❌ La columna '{columna_probabilidad}' no se encuentra en el DataFrame de la región.")
         return
 
-    max_prob = df[columna_probabilidad].max()
-    min_prob = df[columna_probabilidad].min()
-    media = df[columna_probabilidad].mean()
-    mediana = df[columna_probabilidad].median()
+    # 📊 Calcular las métricas estadísticas clave de la columna de probabilidad
+    max_prob = df_a_usar[columna_probabilidad].max()
+    min_prob = df_a_usar[columna_probabilidad].min()
+    media = df_a_usar[columna_probabilidad].mean()
+    mediana = df_a_usar[columna_probabilidad].median()
 
-    # Extraer el tipo de probabilidad (Ascenso/Descenso) y el segmento (Oro/Bronce)
+    # ✂️ Extraer el tipo de probabilidad (Ascenso/Descenso) y el segmento de destino
     partes = columna_probabilidad.replace("Probabilidad_", "").split("_")
     tipo_prob = partes[0]
     segmento_destino = partes[-1]
 
-    st.markdown("---")
     st.markdown(f"🧠 **Interpretación Automática del Histograma: {tipo_prob} a {segmento_destino}**")
 
+    # 🎯 Análisis de casos extremos (probabilidad cercana a 1 o 0)
     if np.isclose(max_prob, 1.0):
         st.markdown(f"- 🎯 Hay un grupo de clientes con {tipo_prob} asegurado al segmento **{segmento_destino}** (probabilidad ~1.0). Son casos prioritarios para intervención inmediata.")
     if np.isclose(min_prob, 0.0):
         st.markdown("- ⚠️ Se detecta una base con probabilidad cero. Revisar si son clientes inactivos o sin historial suficiente.")
 
+    # 📈 Interpretación basada en las métricas de tendencia central
     st.markdown(f"- 📊 En **{region}**, la media de {tipo_prob} es **{media:.2f}** y la mediana es **{mediana:.2f}**."
                 f"Esto sugiere{' potencial activo' if media > 0.5 else ' baja disposición al cambio'} al segmento **{segmento_destino}**.")
 
     st.caption("💡 Esta lectura puede ayudarte a detectar oportunidades de crecimiento o de riesgo en tu cartera.")
 
-# --- Ejemplo de cómo se llamaría la función ---
-# interpretar_histograma_probabilidad(df_tac, "Probabilidad_Ascenso_Oro", "Tacna")
-# interpretar_histograma_probabilidad(df_moq, "Probabilidad_Descenso_Bronce", "Moquegua")
-
 def interpretar_violin_rfm(df, variable, region):
+    """
+    Genera una interpretación automática y robusta para un gráfico de violín.
+    Esta función ahora utiliza st.session_state.df_to_display para asegurar
+    que la interpretación siempre se base en el DataFrame seleccionado.
+
+    Args:
+        df (pd.DataFrame): Se mantiene el parámetro por compatibilidad, pero
+                          el DataFrame real se carga desde el estado de la sesión.
+        variable (str): La variable (columna) a interpretar.
+        region (str): El nombre de la región.
+    """
     st.markdown("🧠 **Interpretación Automática del Violín Plot:**")
 
-    # Agrupamos y forzamos el orden lógico
-    resumen_bruto = df.groupby("Cluster_Label")[variable].describe()[["mean", "std"]].round(2)
-    resumen = ordenar_segmentos_seguro(resumen_bruto)
-
-    if resumen is not None and not resumen.empty:
-        mayor_media = resumen["mean"].idxmax()
-        menor_media = resumen["mean"].idxmin()
-
-        st.markdown(f"- 📍 En **{region}**, el clúster con mayor valor promedio de `{variable}` es **{mayor_media}**.")
-        st.markdown(f"- 🧭 El clúster con menor valor promedio es **{menor_media}**.")
-
-        if resumen["std"].max() > 0.5 * resumen["mean"].max():
-            st.markdown("- ⚠️ Hay alta dispersión en algunos clústeres, indicando comportamiento variado o presencia de outliers.")
-        else:
-            st.markdown("- ✅ Las distribuciones son consistentes, lo que sugiere que los clústeres están bien definidos en esta variable.")
+    # Usamos el DataFrame del estado de la sesión para que los datos sean dinámicos
+    # y se actualicen con los cambios de la barra lateral.
+    if 'df_to_display' in st.session_state:
+        df_a_usar = st.session_state.df_to_display
     else:
-        st.warning("⚠️ No se pudo calcular resumen estadístico confiable para esta métrica.")
-
-def interpretar_kde_rfm(df, variable, region):
-    st.markdown("🧠 **Interpretación Automática del KDE Plot:**")
+        # En caso de que no exista, usamos el DataFrame pasado como argumento (fallback)
+        df_a_usar = df
+        st.warning("⚠️ No se encontró 'df_to_display' en st.session_state. Usando el DataFrame por defecto.")
 
     try:
-        resumen_bruto = df.groupby("Cluster_Label")[variable].describe()[["mean", "std"]].round(2)
+        # Agrupamos y forzamos el orden lógico
+        resumen_bruto = df_a_usar.groupby("Cluster_Label")[variable].describe()[["mean", "std"]].round(2)
+        # La función 'ordenar_segmentos_seguro' debe estar definida en tu código principal
+        # o puedes reemplazarla con una lógica de ordenación si es necesario.
+        resumen = ordenar_segmentos_seguro(resumen_bruto)
+
+        if resumen is not None and not resumen.empty:
+            mayor_media = resumen["mean"].idxmax()
+            menor_media = resumen["mean"].idxmin()
+
+            st.markdown(f"- 📍 En **{region}**, el clúster con mayor valor promedio de `{variable}` es **{mayor_media}**.")
+            st.markdown(f"- 🧭 El clúster con menor valor promedio es **{menor_media}**.")
+
+            if resumen["std"].max() > 0.5 * resumen["mean"].max():
+                st.markdown("- ⚠️ Hay alta dispersión en algunos clústeres, indicando comportamiento variado o presencia de outliers.")
+            else:
+                st.markdown("- ✅ Las distribuciones son consistentes, lo que sugiere que los clústeres están bien definidos en esta variable.")
+        else:
+            st.warning("⚠️ No se pudo calcular resumen estadístico confiable para esta métrica.")
+
+    except Exception as e:
+        st.error(f"Ocurrió un error al generar la interpretación: {e}")
+
+def ordenar_segmentos_seguro(df_resumen):
+    """
+    Función auxiliar para ordenar los segmentos de un DataFrame de resumen.
+    Se incluye para hacer el código autocontenido.
+    """
+    try:
+        # Intenta ordenar el índice si es numérico
+        df_resumen.index = df_resumen.index.astype(int)
+        return df_resumen.sort_index()
+    except (ValueError, TypeError):
+        # Si no es numérico, simplemente ordena alfabéticamente
+        return df_resumen.sort_index()
+
+def interpretar_kde_rfm(df, variable, region):
+    """
+    Genera una interpretación del gráfico KDE para las métricas RFM.
+    Esta función ahora utiliza st.session_state para garantizar que la
+    interpretación se basa en los datos de la región seleccionada.
+
+    Args:
+        df (pd.DataFrame): Este parámetro se mantiene por compatibilidad, pero
+                          la función ahora carga el DataFrame desde st.session_state.
+        variable (str): La variable RFM a analizar ('Recency', 'Frequency' o 'Monetary').
+        region (str): La región a la que corresponden los datos.
+    """
+    st.markdown("---")
+    st.markdown("🧠 **Interpretación Automática del KDE Plot:**")
+
+    # Usamos el DataFrame del estado de la sesión para que los datos sean dinámicos
+    if 'df_to_display' in st.session_state:
+        df_a_usar = st.session_state.df_to_display
+    else:
+        # En caso de que no exista, usamos el DataFrame pasado como argumento (fallback)
+        df_a_usar = df
+        st.warning("⚠️ No se encontró 'df_to_display' en st.session_state. Usando el DataFrame por defecto.")
+
+    # Verificar que las columnas necesarias existen en el DataFrame
+    if "Cluster_Label" not in df_a_usar.columns or variable not in df_a_usar.columns:
+        st.error(f"❌ Las columnas 'Cluster_Label' o '{variable}' no se encuentran en el DataFrame de la región.")
+        return
+
+    try:
+        resumen_bruto = df_a_usar.groupby("Cluster_Label")[variable].describe()[["mean", "std"]].round(2)
         resumen = ordenar_segmentos_seguro(resumen_bruto)
 
         if resumen is not None and not resumen.empty:
@@ -363,22 +453,63 @@ def interpretar_kde_rfm(df, variable, region):
     except Exception as e:
         st.error(f"❌ Error al interpretar el gráfico KDE: {e}")
 
+def ordenar_segmentos_seguro(df_resumen):
+    """
+    Función auxiliar para ordenar los segmentos de un DataFrame de resumen.
+    Se incluye para hacer el código autocontenido.
+    """
+    try:
+        # Intenta ordenar el índice si es numérico
+        df_resumen.index = df_resumen.index.astype(int)
+        return df_resumen.sort_index()
+    except (ValueError, TypeError):
+        # Si no es numérico, simplemente ordena alfabéticamente
+        return df_resumen.sort_index()
+
 def interpretar_radar_rfm(df_region, region):
+    """
+    Genera una interpretación del perfil RFM por clúster, basándose en los valores
+    promedio de Recency, Frequency y Monetary. Esta función ahora utiliza
+    st.session_state para garantizar que la interpretación se basa en los
+    datos de la región seleccionada.
+
+    Args:
+        df_region (pd.DataFrame): Este parámetro se mantiene por compatibilidad, pero
+                                  la función ahora carga el DataFrame desde st.session_state.
+        region (str): La región a la que corresponden los datos.
+    """
+    st.markdown("---")
     st.markdown("🧠 **Interpretación del Perfil RFM por Clúster:**")
 
+    # Usamos el DataFrame del estado de la sesión para que los datos sean dinámicos
+    if 'df_to_display' in st.session_state:
+        df_a_usar = st.session_state.df_to_display
+    else:
+        # En caso de que no exista, usamos el DataFrame pasado como argumento (fallback)
+        df_a_usar = df_region
+        st.warning("⚠️ No se encontró 'df_to_display' en st.session_state. Usando el DataFrame por defecto.")
+
+    # Verificar que las columnas necesarias existen en el DataFrame
+    required_cols = ["Cluster_Label", "Recency", "Frequency", "Monetary"]
+    if not all(col in df_a_usar.columns for col in required_cols):
+        st.error(f"❌ Faltan una o más columnas requeridas en el DataFrame de la región: {required_cols}.")
+        return
+
     try:
-        mean_raw = df_region.groupby("Cluster_Label")[["Recency", "Frequency", "Monetary"]].mean().round(1)
+        mean_raw = df_a_usar.groupby("Cluster_Label")[["Recency", "Frequency", "Monetary"]].mean().round(1)
         mean_profiles = ordenar_segmentos_seguro(mean_raw)
 
         if mean_profiles is not None and not mean_profiles.empty:
             # Identificamos clúster con máximos por métrica
             estrella = mean_profiles["Frequency"].idxmax()
+            # Para Recency, un valor bajo es mejor, pero el radar plot muestra lo opuesto.
+            # La interpretación debe ser coherente con el gráfico.
             rezagado = mean_profiles["Recency"].idxmax()
             ticket_alto = mean_profiles["Monetary"].idxmax()
 
-            st.markdown(f"- ⭐ **{estrella}** destaca por su **alta frecuencia de compra**.")
-            st.markdown(f"- ⌛ **{rezagado}** muestra el **mayor tiempo desde la última compra (Recency)**.")
-            st.markdown(f"- 💰 **{ticket_alto}** tiene el **mayor gasto promedio por cliente**.")
+            st.markdown(f"- ⭐ El segmento **{estrella}** destaca por su **alta frecuencia de compra**.")
+            st.markdown(f"- ⌛ El segmento **{rezagado}** muestra el **mayor tiempo desde la última compra (Recency)**, lo que indica clientes menos recientes.")
+            st.markdown(f"- 💰 El segmento **{ticket_alto}** tiene el **mayor gasto promedio por cliente**.")
 
             # 🧠 Análisis cruzado: ¿hay un clúster que lidera en más de una métrica?
             contador_dominancia = {}
@@ -389,7 +520,7 @@ def interpretar_radar_rfm(df_region, region):
 
             if dominante:
                 for clus in dominante:
-                    st.success(f"🥇 **{clus}** lidera en **{contador_dominancia[clus]} métricas** clave. Es un segmento estratégico con alto potencial.")
+                    st.success(f"🥇 El segmento **{clus}** lidera en **{contador_dominancia[clus]} métricas** clave. Es un segmento estratégico con alto potencial.")
             else:
                 st.info("🔍 No hay un único clúster dominante en más de una métrica. La segmentación presenta especializaciones distintas.")
 
@@ -397,53 +528,142 @@ def interpretar_radar_rfm(df_region, region):
             st.warning("⚠️ No se pudo generar interpretación: el resumen promedio está vacío o mal estructurado.")
 
     except Exception as e:
-        st.error(f"❌ Error al interpretar perfil RFM: {e}")
+        st.error(f"❌ Error al interpretar el perfil RFM: {e}")
+
+def ordenar_segmentos_seguro(df_resumen):
+    """
+    Función auxiliar para ordenar los segmentos de un DataFrame de resumen.
+    Se incluye para hacer el código autocontenido.
+    """
+    try:
+        # Intenta ordenar el índice si es numérico
+        df_resumen.index = df_resumen.index.astype(int)
+        return df_resumen.sort_index()
+    except (ValueError, TypeError):
+        # Si no es numérico, simplemente ordena alfabéticamente
+        return df_resumen.sort_index()
 
 def interpretar_comparativa_regional(df):
+    """
+    Genera una interpretación del gráfico de barras de comparación regional,
+    identificando la región líder en diferentes métricas (cantidad de clientes,
+    valor total y ticket promedio).
+
+    Args:
+        df (pd.DataFrame): El DataFrame que contiene los datos de las regiones
+                          y los clústeres.
+    """
+    st.markdown("---")
     st.markdown("🧠 **Interpretación Comparativa Regional:**")
 
-    resumen = df.groupby("Región").agg({
-        "Cantidad": "sum",
-        "Monto_Total": "sum",
-        "Ticket_Promedio": "mean"
-    }).round(2)
+    # Verificar que las columnas necesarias existen en el DataFrame
+    required_cols = ["Región", "Cantidad", "Monto_Total", "Ticket_Promedio", "Cluster_Label"]
+    if not all(col in df.columns for col in required_cols):
+        st.error(f"❌ Faltan una o más columnas requeridas en el DataFrame: {required_cols}.")
+        return
 
-    region_lider_volumen = resumen["Cantidad"].idxmax()
-    region_lider_valor = resumen["Monto_Total"].idxmax()
-    region_lider_ticket = resumen["Ticket_Promedio"].idxmax()
+    try:
+        resumen = df.groupby("Región").agg(
+            Cantidad=("Cantidad", "sum"),
+            Monto_Total=("Monto_Total", "sum"),
+            Ticket_Promedio=("Ticket_Promedio", "mean")
+        ).round(2)
 
-    st.markdown(f"- 📦 **{region_lider_volumen}** tiene mayor cantidad total de clientes.")
-    st.markdown(f"- 💰 **{region_lider_valor}** lidera en valor monetario acumulado.")
-    st.markdown(f"- 🎟️ **{region_lider_ticket}** posee el ticket promedio más alto.")
+        if resumen.empty:
+            st.warning("⚠️ El DataFrame de resumen regional está vacío. No se puede generar la interpretación.")
+            return
 
-    # Detección de disparidad en clúster Oro
-    df_oro = df[df["Cluster_Label"] == "Oro"]
-    top_oro = df_oro.groupby("Región")["Cantidad"].sum().idxmax()
-    st.markdown(f"- 🥇 En el segmento Oro, la mayoría de clientes proviene de **{top_oro}**.")
+        region_lider_volumen = resumen["Cantidad"].idxmax()
+        region_lider_valor = resumen["Monto_Total"].idxmax()
+        region_lider_ticket = resumen["Ticket_Promedio"].idxmax()
+
+        st.markdown(f"- 📦 La región **{region_lider_volumen}** tiene la mayor cantidad total de clientes.")
+        st.markdown(f"- 💰 La región **{region_lider_valor}** lidera en valor monetario acumulado.")
+        st.markdown(f"- 🎟️ La región **{region_lider_ticket}** posee el ticket promedio más alto.")
+
+        # 🧠 Análisis cruzado: ¿hay una región que lidera en más de una métrica?
+        contador_dominancia = {}
+        for region in [region_lider_volumen, region_lider_valor, region_lider_ticket]:
+            contador_dominancia[region] = contador_dominancia.get(region, 0) + 1
+
+        dominante = [k for k, v in contador_dominancia.items() if v >= 2]
+
+        if dominante:
+            for reg in dominante:
+                st.success(f"🏆 **{reg}** es la región más estratégica, liderando en **{contador_dominancia[reg]} métricas** clave.")
+        else:
+            st.info("🔍 No hay una única región dominante en más de una métrica. Cada región tiene una especialización distinta.")
+
+        # Detección de disparidad en clúster Oro
+        df_oro = df[df["Cluster_Label"] == "Oro"]
+        if not df_oro.empty:
+            top_oro = df_oro.groupby("Región")["Cantidad"].sum().idxmax()
+            st.markdown(f"- 🥇 En el segmento Oro, la mayoría de clientes proviene de **{top_oro}**, lo que sugiere un enfoque estratégico en esa región.")
+        else:
+            st.warning("⚠️ No se encontraron datos para el segmento 'Oro'.")
+
+    except Exception as e:
+        st.error(f"❌ Error al interpretar la comparativa regional: {e}")
+
+def ordenar_segmentos_seguro(df_resumen):
+    """
+    Función auxiliar para ordenar los segmentos de un DataFrame de resumen.
+    Se incluye para hacer el código autocontenido.
+    """
+    try:
+        # Intenta ordenar el índice si es numérico
+        df_resumen.index = df_resumen.index.astype(int)
+        return df_resumen.sort_index()
+    except (ValueError, TypeError):
+        # Si no es numérico, simplemente ordena alfabéticamente
+        return df_resumen.sort_index()
 
 def interpretar_predicciones(region, df_region):
+    """
+    Genera una interpretación automática y detallada del perfil predictivo
+    de la región seleccionada, analizando las probabilidades de ascenso a Oro
+    y de descenso a Bronce.
+
+    Args:
+        region (str): El nombre de la región seleccionada.
+        df_region (pd.DataFrame): El DataFrame filtrado para la región.
+    """
+    st.markdown("---")
     st.markdown("🧠 **Interpretación automática del perfil predictivo:**")
+
+    # Verificar si el DataFrame está vacío o faltan columnas esenciales
+    required_cols = ["Probabilidad_Ascenso_Oro", "Probabilidad_Descenso_Bronce", "Cluster_Label"]
+    if df_region.empty or not all(col in df_region.columns for col in required_cols):
+        st.warning("⚠️ No hay datos disponibles para la interpretación de predicciones en esta región o faltan columnas.")
+        return
 
     try:
         media_ascenso = df_region["Probabilidad_Ascenso_Oro"].mean()
         media_bronce = df_region["Probabilidad_Descenso_Bronce"].mean()
 
-        # Interpretación general
+        # Interpretación general de la probabilidad de ascenso
+        st.markdown("---")
+        st.subheader("Análisis General de la Región")
         if media_ascenso > 0.6:
-            st.markdown(f"- 🎯 En **{region}**, existe **alto potencial de ascenso a Oro** (media: {media_ascenso:.2f}).")
+            st.markdown(f"- 🎯 En **{region}**, existe **alto potencial de ascenso a Oro** (probabilidad promedio: {media_ascenso:.2f}). Se recomienda una campaña de engagement para este grupo.")
         elif media_ascenso < 0.4:
-            st.markdown(f"- ⚠️ La probabilidad media de ascenso a Oro es baja ({media_ascenso:.2f}). Requiere campañas proactivas.")
+            st.markdown(f"- ⚠️ La probabilidad promedio de ascenso a Oro es baja ({media_ascenso:.2f}). Esto requiere campañas proactivas de activación o estrategias de retención diferenciadas.")
         else:
-            st.markdown(f"- 🟡 El ascenso a Oro promedio es intermedio ({media_ascenso:.2f}). Hay potencial para desarrollar.")
+            st.markdown(f"- 🟡 El ascenso a Oro promedio es intermedio ({media_ascenso:.2f}). Hay potencial para desarrollar y convertir a un segmento importante de clientes.")
 
+        # Interpretación general del riesgo de descenso
+        st.markdown("---")
+        st.subheader("Análisis de Riesgo de Deserción")
         if media_bronce > 0.6:
-            st.markdown(f"- 🔻 También hay **alto riesgo de caída a Bronce** (media: {media_bronce:.2f}), lo que requiere contención.")
+            st.markdown(f"- 🔻 También hay **alto riesgo de caída a Bronce** (probabilidad promedio: {media_bronce:.2f}), lo que requiere una estrategia de contención y re-enganche inmediata.")
         elif media_bronce < 0.3:
-            st.markdown(f"- ✅ Riesgo de caída a Bronce controlado (media: {media_bronce:.2f}).")
+            st.markdown(f"- ✅ El riesgo de caída a Bronce está controlado (probabilidad promedio: {media_bronce:.2f}). La mayoría de los clientes se mantiene en clústeres de valor.")
         else:
-            st.markdown(f"- 🧭 Riesgo moderado de caída a Bronce detectado (media: {media_bronce:.2f}).")
+            st.markdown(f"- 🧭 Se detectó un riesgo moderado de caída a Bronce (probabilidad promedio: {media_bronce:.2f}). Se debe monitorear a estos clientes para evitar su salida del segmento.")
 
-        # Agrupación robusta
+        # Análisis por clúster de clientes
+        st.markdown("---")
+        st.subheader("Oportunidades y Riesgos por Clúster")
         ascenso_por_cluster = ordenar_segmentos_seguro(
             df_region.groupby("Cluster_Label")["Probabilidad_Ascenso_Oro"].mean().round(2)
         )
@@ -451,35 +671,28 @@ def interpretar_predicciones(region, df_region):
             df_region.groupby("Cluster_Label")["Probabilidad_Descenso_Bronce"].mean().round(2)
         )
 
-        # Verificación
-        if ascenso_por_cluster is not None and not ascenso_por_cluster.empty:
+        if not ascenso_por_cluster.empty:
             mejor_cluster = ascenso_por_cluster.idxmax()
-            st.markdown(f"- 🟩 **{mejor_cluster}** tiene la mayor probabilidad promedio de **ascenso a Oro** ({ascenso_por_cluster[mejor_cluster]:.2f}).")
-        else:
-            st.warning("⚠️ No se pudo interpretar el clúster con mayor probabilidad de ascenso a Oro.")
+            st.markdown(f"- 🟩 El clúster **{mejor_cluster}** tiene la mayor probabilidad promedio de **ascenso a Oro** ({ascenso_por_cluster[mejor_cluster]:.2f}). Se recomienda priorizar a estos clientes en las campañas de marketing.")
 
-        if bronce_por_cluster is not None and not bronce_por_cluster.empty:
+        if not bronce_por_cluster.empty:
             peor_cluster = bronce_por_cluster.idxmax()
-            st.markdown(f"- 🟥 **{peor_cluster}** concentra el mayor riesgo de **caída a Bronce** ({bronce_por_cluster[peor_cluster]:.2f}).")
-        else:
-            st.warning("⚠️ No se pudo interpretar el clúster con mayor riesgo de caída a Bronce.")
+            st.markdown(f"- 🟥 El clúster **{peor_cluster}** concentra el mayor riesgo de **caída a Bronce** ({bronce_por_cluster[peor_cluster]:.2f}). Es crucial implementar acciones de retención para este segmento.")
 
-        # Recomendación táctica
-        if (
-            ascenso_por_cluster is not None and bronce_por_cluster is not None
-            and not ascenso_por_cluster.empty and not bronce_por_cluster.empty
-        ):
+        # Recomendación táctica cruzada
+        if not ascenso_por_cluster.empty and not bronce_por_cluster.empty:
             asc_val = ascenso_por_cluster[ascenso_por_cluster.idxmax()]
             bron_val = bronce_por_cluster[bronce_por_cluster.idxmax()]
-
+            st.markdown("---")
+            st.subheader("Estrategia Recomendada")
             if asc_val > 0.7 and bron_val > 0.7:
-                st.markdown("- 🔀 Se recomienda una estrategia **dual**: potenciar ascenso en segmentos listos y retener segmentos críticos simultáneamente.")
+                st.markdown("- 🔀 Se recomienda una estrategia **dual**: potenciar el ascenso de los segmentos con alto potencial y, al mismo tiempo, contener a los segmentos críticos con alto riesgo de caída.")
             elif asc_val > 0.7:
-                st.markdown("- 🎯 Enfocar las campañas en el clúster con mayor potencial de ascenso.")
+                st.markdown("- 🎯 La estrategia debe enfocarse en potenciar a los clientes con alto potencial de ascenso. Son los que darán mayor retorno de inversión en este momento.")
             elif bron_val > 0.7:
-                st.markdown("- 🛑 Priorizar contención sobre el clúster más riesgoso antes que se desactive.")
-        else:
-            st.info("🔍 No se pudo emitir una recomendación táctica por datos incompletos.")
+                st.markdown("- 🛑 La prioridad es la contención. Se deben implementar acciones para retener a los clientes del clúster más riesgoso antes de que se pierdan por completo.")
+            else:
+                st.info("🔍 Los valores de probabilidad no son extremos. Se recomienda una estrategia de monitoreo constante y de optimización de las campañas existentes.")
 
     except Exception as e:
         st.error(f"❌ Error durante la interpretación de predicciones: {e}")
@@ -488,7 +701,23 @@ def plot_scatter_rfm(df, eje_x, eje_y, titulo="RFM Scatter"):
     """
     Crea un gráfico de dispersión interactivo usando Plotly.
     Plotly es la librería recomendada para gráficos en Streamlit.
+
+    Args:
+        df (pd.DataFrame): DataFrame con los datos de clientes, incluyendo las
+                          columnas para los ejes, 'Cluster_Label', y datos de hover.
+        eje_x (str): Nombre de la columna para el eje X.
+        eje_y (str): Nombre de la columna para el eje Y.
+        titulo (str): Título del gráfico.
     """
+    # Definimos el diccionario de colores para los clústeres
+    colores_k5 = {
+        0: 'green',
+        1: 'blue',
+        2: 'red',
+        3: 'purple',
+        4: 'orange'
+    }
+
     # Usamos plotly.express para crear el gráfico de dispersión de manera sencilla.
     # El diccionario de colores se mapea directamente a la columna 'Cluster_Label'
     fig = px.scatter(
